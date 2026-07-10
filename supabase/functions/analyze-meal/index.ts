@@ -8,13 +8,21 @@ prefer slight underestimates of quantity over generous ones. Flag any
 visible bread, grain, rice, pasta, sugar, or other high-carb item by name
 in the notes field, since these are protocol violations on a keto diet.
 
+The user may also provide a short text note alongside the photo (e.g. exact
+portion weights, ingredients not visible in the shot, cooking method). Treat
+anything they state as ground truth — they know their own plate better than
+the image does — and use it to refine the estimate. This can also raise your
+confidence: a stated portion weight resolves the biggest source of
+uncertainty in a photo-only estimate.
+
 Respond with ONLY a raw JSON object, no markdown code fences, no prose,
 matching exactly this shape:
 {"description":string,"protein_g":number,"fat_g":number,"net_carbs_g":number,"calories":number,"confidence":"low"|"medium"|"high","notes":string}
 
 description: short factual description of what's on the plate.
-confidence: "low" if portions/ingredients are hard to judge from the image,
-"high" if the plate is clear and unambiguous, "medium" otherwise.
+confidence: "low" if portions/ingredients are hard to judge from the image
+and no user note fills the gap, "high" if the plate is clear and
+unambiguous or the user note resolves the ambiguity, "medium" otherwise.
 notes: one line — flag carb risks, or state there are none.`
 
 Deno.serve(async (req) => {
@@ -23,7 +31,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { image_base64, media_type } = await req.json()
+    const { image_base64, media_type, user_context } = await req.json()
 
     if (!image_base64 || !media_type) {
       return new Response(JSON.stringify({ error: 'Missing image_base64 or media_type' }), {
@@ -32,9 +40,13 @@ Deno.serve(async (req) => {
       })
     }
 
+    const textPrompt = user_context
+      ? `Estimate the macros for this meal. User-provided context: ${user_context}`
+      : 'Estimate the macros for this meal.'
+
     const rawText = await callClaude(SYSTEM_PROMPT, [
       { type: 'image', source: { type: 'base64', media_type, data: image_base64 } },
-      { type: 'text', text: 'Estimate the macros for this meal.' },
+      { type: 'text', text: textPrompt },
     ])
 
     let result: Record<string, unknown>

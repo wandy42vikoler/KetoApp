@@ -24,6 +24,7 @@ export default function MealLog({ onBack, onClose, onSaved }) {
   const [fields, setFields] = useState(EMPTY_FIELDS)
   const [confidence, setConfidence] = useState('manual')
   const [notes, setNotes] = useState(null)
+  const [photoContext, setPhotoContext] = useState('')
 
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState(null)
@@ -44,7 +45,7 @@ export default function MealLog({ onBack, onClose, onSaved }) {
     try {
       const { base64, mediaType } = await fileToBase64(file)
       const { data, error } = await supabase.functions.invoke('analyze-meal', {
-        body: { image_base64: base64, media_type: mediaType },
+        body: { image_base64: base64, media_type: mediaType, user_context: photoContext || undefined },
       })
       if (error) throw error
       setFields({
@@ -122,6 +123,15 @@ export default function MealLog({ onBack, onClose, onSaved }) {
               )}
             </label>
             {analyzeError && <div className="font-mono text-[11px] text-alert mt-3">{analyzeError}</div>}
+            <div className="mt-3">
+              <Field
+                label="DESCRIBE IT (OPTIONAL)"
+                value={photoContext}
+                onChange={setPhotoContext}
+                placeholder="e.g. two grilled chicken breasts, roughly 200g each"
+                disabled={analyzing}
+              />
+            </div>
           </Panel>
         )}
 
