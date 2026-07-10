@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* ============================================================
+   TOKENS — "Protocol Console" design language, ported from
+   KetoApp.jsx (the visual reference). Dark, clinical,
+   instrument-panel aesthetic.
+   ============================================================ */
+@theme {
+  --color-bg: #0a0c0b;
+  --color-panel: #121614;
+  --color-panel-raised: #161b19;
+  --color-hairline: #242c29;
+  --color-hairline-lit: #33403c;
+
+  --color-fg: #e7ece8;
+  --color-fg-muted: #8a9a94;
+  --color-fg-dim: #546059;
+
+  --color-signal: #3fce8e;
+  --color-signal-dim: #1b4a38;
+  --color-alert: #e2555a;
+  --color-alert-dim: #4a2225;
+  --color-caution: #e3a93f;
+  --color-caution-dim: #4a3b1c;
+  --color-info: #5b8fa8;
+
+  --font-mono: "SF Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-sans: -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+.bg-vignette {
+  background: radial-gradient(120% 90% at 50% -10%, #141a17 0%, #0a0c0b 55%);
+}
