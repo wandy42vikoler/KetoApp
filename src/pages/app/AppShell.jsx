@@ -1,64 +1,34 @@
 import { useState } from 'react'
-import { useAuth } from '../../context/AuthContext'
 import BottomNav from '../../components/nav/BottomNav'
 import Panel from '../../components/ui/Panel'
-import Eyebrow from '../../components/ui/Eyebrow'
-import ProtocolDial from '../../components/ui/ProtocolDial'
+import Dashboard from './Dashboard'
 import TargetsScreen from './TargetsScreen'
+import LogSheet from './LogSheet'
+import CheckIn from './CheckIn'
 
 export default function AppShell() {
   const [tab, setTab] = useState('home')
-  const { user, profile, signOut } = useAuth()
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [checkinOpen, setCheckinOpen] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  function handleCheckinSaved() {
+    setRefreshKey((k) => k + 1)
+  }
 
   return (
-    <div className="min-h-screen bg-bg bg-vignette">
+    <div className="min-h-screen bg-bg bg-vignette relative">
       <div className="px-4 pt-6 pb-[100px] max-w-md mx-auto">
-        {tab === 'home' && <HomePlaceholder user={user} profile={profile} onSignOut={signOut} />}
+        {tab === 'home' && <Dashboard onOpenCheckIn={() => setCheckinOpen(true)} refreshKey={refreshKey} />}
         {tab === 'trends' && <ComingSoon title="Telemetry" label="Trends" />}
         {tab === 'coach' && <ComingSoon title="Live Context Loaded" label="Coach" />}
         {tab === 'targets' && <TargetsScreen />}
       </div>
-      <BottomNav active={tab} onSelect={setTab} onFab={() => {}} />
-    </div>
-  )
-}
 
-function HomePlaceholder({ user, profile, onSignOut }) {
-  return (
-    <div>
-      <div className="flex justify-between items-baseline mb-5">
-        <div>
-          <div className="font-mono text-[10px] text-fg-dim tracking-[0.18em]">PROTOCOL // TKD-01</div>
-          <div className="text-xl font-bold text-fg">Welcome, {user?.email}</div>
-        </div>
-      </div>
+      <BottomNav active={tab} onSelect={setTab} onFab={() => setSheetOpen(true)} />
 
-      {profile?.starting_weight_kg && profile?.goal_weight_kg && (
-        <Panel className="mb-3.5">
-          <ProtocolDial
-            start={profile.starting_weight_kg}
-            goal={profile.goal_weight_kg}
-            current={profile.starting_weight_kg}
-          />
-        </Panel>
-      )}
-
-      <Panel>
-        <Eyebrow>Account</Eyebrow>
-        <div className="font-mono text-[11px] text-fg-muted mb-4">
-          Protocol start: {profile?.protocol_start_date ?? '—'}
-        </div>
-        <button
-          onClick={onSignOut}
-          className="w-full bg-transparent border border-hairline-lit rounded-[9px] py-2.5 text-fg-muted font-mono text-[12px]"
-        >
-          SIGN OUT
-        </button>
-      </Panel>
-
-      <div className="font-mono text-[10.5px] text-fg-dim text-center mt-6">
-        Dashboard, meals, workouts &amp; check-ins are built in the next pass.
-      </div>
+      {sheetOpen && <LogSheet onClose={() => setSheetOpen(false)} onCheckinSaved={handleCheckinSaved} />}
+      {checkinOpen && <CheckIn onClose={() => setCheckinOpen(false)} onSaved={handleCheckinSaved} />}
     </div>
   )
 }

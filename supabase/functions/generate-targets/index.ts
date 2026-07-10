@@ -1,9 +1,8 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { COACH_VOICE } from '../_shared/coach-voice.ts'
 import { computeAssessment } from '../_shared/assessment.ts'
-
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
-const MODEL = 'claude-sonnet-5'
+import { callClaude } from '../_shared/anthropic.ts'
+import { extractJson } from '../_shared/extractJson.ts'
 
 const SYSTEM_PROMPT = `${COACH_VOICE}
 
@@ -24,23 +23,12 @@ matching exactly this shape (maintenance_calories is your step-2 TDEE
 estimate, before the deficit is applied):
 {"calories":number,"protein_g":number,"fat_g":number,"net_carbs_g":number,"maintenance_calories":number}`
 
-function extractJson(rawText: string): unknown {
-  const trimmed = rawText.trim()
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  const candidate = fenced ? fenced[1].trim() : trimmed
-  return JSON.parse(candidate)
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    if (!ANTHROPIC_API_KEY) {
-      throw new Error('ANTHROPIC_API_KEY is not configured on this Supabase project')
-    }
-
     const { height_cm, gender, activity_level, starting_weight_kg, goal_weight_kg, goal_timeline_weeks } =
       await req.json()
 
@@ -53,34 +41,7 @@ Deno.serve(async (req) => {
 
     const userMessage = `height_cm=${height_cm}, gender=${gender}, activity_level=${activity_level}/10, starting_weight_kg=${starting_weight_kg}, goal_weight_kg=${goal_weight_kg}, goal_timeline_weeks=${goal_timeline_weeks}`
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
-    })
-
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`Anthropic API error (${response.status}): ${text}`)
-    }
-
-    const result = await response.json()
-    const rawText = result.content?.find((block: { type: string }) => block.type === 'text')?.text ?? ''
-
-    if (!rawText) {
-      throw new Error(
-        `Anthropic returned no text content (stop_reason: ${result.stop_reason}). Raw response: ${JSON.stringify(result).slice(0, 500)}`,
-      )
-    }
+    const rawText = await callClaude(SYSTEM_PROMPT, userMessage)
 
     let targets: {
       calories: number
