@@ -3,14 +3,13 @@ import { Moon, Droplet, Sparkles } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchTodayLog, fetchProgressSummary } from '../../lib/dailyLog'
+import { recommendedWaterLiters } from '../../lib/hydration'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
 import Stamp from '../../components/ui/Stamp'
 import MacroBar from '../../components/ui/MacroBar'
 import Stat from '../../components/ui/Stat'
 import ProtocolDial from '../../components/ui/ProtocolDial'
-
-const SUPPLEMENT_COUNT = 4 // creatine, electrolytes, magnesium, omega3 — see CheckIn.jsx
 
 function computeEta(progress) {
   if (!progress?.current_weight_kg || progress.rate_kg_per_week == null) return null
@@ -23,7 +22,7 @@ function computeEta(progress) {
 }
 
 export default function Dashboard({ onOpenCheckIn, refreshKey }) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [log, setLog] = useState(null)
   const [target, setTarget] = useState(null)
   const [progress, setProgress] = useState(null)
@@ -59,7 +58,10 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
   const totals = { calories: 0, protein: 0, fat: 0, carbs: 0 }
   const carbStatus = target && totals.carbs > target.net_carbs_g ? 'BREACH' : 'COMPLIANT'
   const eta = computeEta(progress)
-  const supplementCount = Object.values(log?.supplements ?? {}).filter(Boolean).length
+  const waterTarget = recommendedWaterLiters(
+    progress?.current_weight_kg ?? profile?.starting_weight_kg,
+    log?.day_type ?? 'rest',
+  )
 
   return (
     <div>
@@ -131,10 +133,10 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
         </Panel>
         <Panel className="p-3.5">
           <div className="flex items-center gap-1.5 text-fg-muted font-mono text-[10.5px]">
-            <Droplet size={12} /> WATER
+            <Droplet size={12} /> WATER TARGET
           </div>
           <div className="font-mono text-[22px] text-fg mt-1">
-            {log?.water_liters ?? '—'}
+            {waterTarget ?? '—'}
             <span className="text-xs text-fg-dim">L</span>
           </div>
         </Panel>
@@ -144,7 +146,7 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
         <Eyebrow>Today's Log</Eyebrow>
         {log ? (
           <div className="text-[12.5px] text-fg leading-relaxed font-mono">
-            {supplementCount}/{SUPPLEMENT_COUNT} supplements · {log.weight_kg ? `${log.weight_kg}kg` : 'no weight'} ·{' '}
+            {log.weight_kg ? `${log.weight_kg}kg` : 'no weight'} ·{' '}
             {log.body_fat_pct ? `${log.body_fat_pct}% BF` : 'no BF%'}
           </div>
         ) : (

@@ -9,21 +9,12 @@ import Eyebrow from '../../components/ui/Eyebrow'
 import SheetHeader from '../../components/ui/SheetHeader'
 import { Field, SliderField } from '../../components/ui/FormField'
 
-const SUPPLEMENTS = [
-  { key: 'creatine', label: 'Creatine' },
-  { key: 'electrolytes', label: 'Electrolytes' },
-  { key: 'magnesium', label: 'Magnesium' },
-  { key: 'omega3', label: 'Omega-3' },
-]
-
 const EMPTY_FIELDS = {
   weight_kg: '',
   body_fat_pct: '',
   muscle_mass_kg: '',
   sleep_quality: 6,
   energy_level: 6,
-  water_liters: '',
-  supplements: {},
   soreness_notes: '',
   notes: '',
 }
@@ -53,8 +44,6 @@ export default function CheckIn({ onBack, onClose, onSaved }) {
           muscle_mass_kg: existing.muscle_mass_kg ?? '',
           sleep_quality: existing.sleep_quality ?? 6,
           energy_level: existing.energy_level ?? 6,
-          water_liters: existing.water_liters ?? '',
-          supplements: existing.supplements ?? {},
           soreness_notes: existing.soreness_notes ?? '',
           notes: existing.notes ?? '',
         }))
@@ -69,10 +58,6 @@ export default function CheckIn({ onBack, onClose, onSaved }) {
 
   function updateField(key, value) {
     setFields((f) => ({ ...f, [key]: value }))
-  }
-
-  function toggleSupplement(key) {
-    setFields((f) => ({ ...f, supplements: { ...f.supplements, [key]: !f.supplements[key] } }))
   }
 
   async function handlePhotoSelect(e) {
@@ -112,8 +97,6 @@ export default function CheckIn({ onBack, onClose, onSaved }) {
         muscle_mass_kg: fields.muscle_mass_kg === '' ? null : Number(fields.muscle_mass_kg),
         sleep_quality: Number(fields.sleep_quality),
         energy_level: Number(fields.energy_level),
-        water_liters: fields.water_liters === '' ? null : Number(fields.water_liters),
-        supplements: fields.supplements,
         soreness_notes: fields.soreness_notes || null,
         notes: fields.notes || null,
       })
@@ -231,33 +214,6 @@ export default function CheckIn({ onBack, onClose, onSaved }) {
                       value={fields.energy_level}
                       onChange={(v) => updateField('energy_level', v)}
                     />
-                    <Field
-                      label="WATER"
-                      type="number"
-                      unit="L"
-                      value={fields.water_liters}
-                      onChange={(v) => updateField('water_liters', v)}
-                    />
-                  </div>
-                </Panel>
-
-                <Panel className="mb-3.5">
-                  <Eyebrow>Supplements</Eyebrow>
-                  <div className="grid grid-cols-2 gap-2">
-                    {SUPPLEMENTS.map((s) => {
-                      const active = !!fields.supplements[s.key]
-                      return (
-                        <button
-                          key={s.key}
-                          onClick={() => toggleSupplement(s.key)}
-                          className={`py-2 rounded-[8px] font-mono text-[11px] border ${
-                            active ? 'border-signal bg-signal-dim/40 text-signal' : 'border-hairline text-fg-muted'
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      )
-                    })}
                   </div>
                 </Panel>
 
