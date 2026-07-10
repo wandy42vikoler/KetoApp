@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Sparkles, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
+import { computeAssessment } from '../../lib/assessment'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
 import { Field, Select, ActivityLevelField, ACTIVITY_LEVELS } from '../../components/ui/FormField'
@@ -22,6 +23,8 @@ export default function Onboarding() {
   const [basics, setBasics] = useState({ height_cm: '', gender: 'female', activity_level: 'moderate' })
   const [goals, setGoals] = useState({ starting_weight_kg: '', goal_weight_kg: '', goal_timeline_weeks: '' })
   const [targets, setTargets] = useState(EMPTY_MACROS)
+  const [maintenanceCalories, setMaintenanceCalories] = useState(null)
+  const [assessment, setAssessment] = useState(null)
   const [generationError, setGenerationError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
@@ -45,7 +48,10 @@ export default function Onboarding() {
         },
       })
       if (error) throw error
-      setTargets(data)
+      const { maintenance_calories, assessment: assessmentText, ...macros } = data
+      setTargets(macros)
+      setMaintenanceCalories(maintenance_calories)
+      setAssessment(assessmentText)
       goTo('review')
     } catch (err) {
       setGenerationError(err.message || 'Target generation failed.')
@@ -55,7 +61,27 @@ export default function Onboarding() {
   function skipToManualReview() {
     setGenerationError(null)
     setTargets(EMPTY_MACROS)
+    setMaintenanceCalories(null)
+    setAssessment(null)
     goTo('review')
+  }
+
+  function updateTargetField(field, value) {
+    setTargets((t) => {
+      const next = { ...t, [field]: value }
+      if (maintenanceCalories !== null) {
+        setAssessment(
+          computeAssessment({
+            weight_kg: Number(goals.starting_weight_kg),
+            height_cm: Number(basics.height_cm),
+            goal_weight_kg: Number(goals.goal_weight_kg),
+            calories: Number(next.calories) || 0,
+            maintenance_calories: maintenanceCalories,
+          }),
+        )
+      }
+      return next
+    })
   }
 
   async function confirmAndSave() {
@@ -127,7 +153,8 @@ export default function Onboarding() {
         {step === 'review' && (
           <StepReview
             targets={targets}
-            setTargets={setTargets}
+            onFieldChange={updateTargetField}
+            assessment={assessment}
             onBack={() => goTo('goals')}
             onConfirm={confirmAndSave}
             saving={saving}
@@ -270,11 +297,7 @@ function StepGenerating({ error, onRetry, onSkip }) {
   )
 }
 
-function StepReview({ targets, setTargets, onBack, onConfirm, saving, saveError }) {
-  function updateField(field, value) {
-    setTargets((t) => ({ ...t, [field]: value }))
-  }
-
+function StepReview({ targets, onFieldChange, assessment, onBack, onConfirm, saving, saveError }) {
   return (
     <>
       <Panel className="mb-3">
@@ -283,24 +306,42 @@ function StepReview({ targets, setTargets, onBack, onConfirm, saving, saveError 
           Baseline macros. Activity-day adjustments are applied automatically later from logged workouts.
         </div>
         <div className="grid grid-cols-2 gap-2.5">
-          <Field label="CALORIES" type="number" value={targets.calories} onChange={(v) => updateField('calories', v)} />
+          <Field
+            label="CALORIES"
+            type="number"
+            value={targets.calories}
+            onChange={(v) => onFieldChange('calories', v)}
+          />
           <Field
             label="PROTEIN"
             type="number"
             unit="g"
             value={targets.protein_g}
-            onChange={(v) => updateField('protein_g', v)}
+            onChange={(v) => onFieldChange('protein_g', v)}
           />
-          <Field label="FAT" type="number" unit="g" value={targets.fat_g} onChange={(v) => updateField('fat_g', v)} />
+          <Field
+            label="FAT"
+            type="number"
+            unit="g"
+            value={targets.fat_g}
+            onChange={(v) => onFieldChange('fat_g', v)}
+          />
           <Field
             label="NET CARBS"
             type="number"
             unit="g"
             value={targets.net_carbs_g}
-            onChange={(v) => updateField('net_carbs_g', v)}
+            onChange={(v) => onFieldChange('net_carbs_g', v)}
           />
         </div>
       </Panel>
+
+      {assessment && (
+        <Panel className="mb-3">
+          <Eyebrow>AI Assessment</Eyebrow>
+          <div className="text-[12.5px] text-fg leading-relaxed">{assessment}</div>
+        </Panel>
+      )}
 
       {saveError && <div className="font-mono text-[11px] text-alert mb-3">{saveError}</div>}
 

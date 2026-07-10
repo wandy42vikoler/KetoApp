@@ -4,6 +4,7 @@ import BottomNav from '../../components/nav/BottomNav'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
 import ProtocolDial from '../../components/ui/ProtocolDial'
+import TargetsScreen from './TargetsScreen'
 
 export default function AppShell() {
   const [tab, setTab] = useState('home')
@@ -15,7 +16,7 @@ export default function AppShell() {
         {tab === 'home' && <HomePlaceholder user={user} profile={profile} onSignOut={signOut} />}
         {tab === 'trends' && <ComingSoon title="Telemetry" label="Trends" />}
         {tab === 'coach' && <ComingSoon title="Live Context Loaded" label="Coach" />}
-        {tab === 'targets' && <ComingSoon title="Configuration" label="Targets" />}
+        {tab === 'targets' && <TargetsScreen />}
       </div>
       <BottomNav active={tab} onSelect={setTab} onFab={() => {}} />
     </div>

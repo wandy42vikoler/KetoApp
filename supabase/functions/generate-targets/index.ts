@@ -1,5 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { COACH_VOICE } from '../_shared/coach-voice.ts'
+import { computeAssessment } from '../_shared/assessment.ts'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 const MODEL = 'claude-sonnet-5'
@@ -9,7 +10,7 @@ const SYSTEM_PROMPT = `${COACH_VOICE}
 Calculate a baseline Targeted Ketogenic Diet (TKD) daily macro target. Method:
 1. BMR via Mifflin-St Jeor.
 2. Apply an activity multiplier derived from the user's self-reported
-   activity_level (1-10).
+   activity_level (1-10) to get estimated maintenance calories (TDEE).
 3. Derive a sustainable deficit from the stated goal weight and timeline —
    do not exceed a safe rate of loss (roughly 0.5-1% bodyweight/week); if the
    requested timeline implies an unsafe rate, use the safe rate instead and
@@ -19,8 +20,9 @@ Calculate a baseline Targeted Ketogenic Diet (TKD) daily macro target. Method:
    applied later by the app from logged workout data, not by you.
 
 Respond with ONLY a raw JSON object, no markdown code fences, no prose,
-matching exactly this shape:
-{"calories":number,"protein_g":number,"fat_g":number,"net_carbs_g":number}`
+matching exactly this shape (maintenance_calories is your step-2 TDEE
+estimate, before the deficit is applied):
+{"calories":number,"protein_g":number,"fat_g":number,"net_carbs_g":number,"maintenance_calories":number}`
 
 function extractJson(rawText: string): unknown {
   const trimmed = rawText.trim()
@@ -80,14 +82,28 @@ Deno.serve(async (req) => {
       )
     }
 
-    let targets: unknown
+    let targets: {
+      calories: number
+      protein_g: number
+      fat_g: number
+      net_carbs_g: number
+      maintenance_calories: number
+    }
     try {
-      targets = extractJson(rawText)
+      targets = extractJson(rawText) as typeof targets
     } catch {
       throw new Error(`Could not parse JSON from model output: ${rawText.slice(0, 500)}`)
     }
 
-    return new Response(JSON.stringify(targets), {
+    const assessment = computeAssessment({
+      weight_kg: starting_weight_kg,
+      height_cm,
+      goal_weight_kg,
+      calories: targets.calories,
+      maintenance_calories: targets.maintenance_calories,
+    })
+
+    return new Response(JSON.stringify({ ...targets, assessment }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
