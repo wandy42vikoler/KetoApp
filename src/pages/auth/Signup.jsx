@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import Panel from '../../components/ui/Panel'
 import { Field } from '../../components/ui/FormField'
@@ -10,7 +10,6 @@ export default function Signup() {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [checkEmail, setCheckEmail] = useState(false)
-  const navigate = useNavigate()
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -22,11 +21,13 @@ export default function Signup() {
       setError(signUpError.message)
       return
     }
-    if (data.session) {
-      navigate('/', { replace: true })
-    } else {
+    if (!data.session) {
+      // Email confirmation is required — no session yet, so there's nothing
+      // for the auth-state listener to react to. Show the "check your inbox" state.
       setCheckEmail(true)
     }
+    // If a session came back, RedirectIfAuthed reacts to it and navigates —
+    // no imperative navigate() here (it would race the auth-state listener).
   }
 
   return (

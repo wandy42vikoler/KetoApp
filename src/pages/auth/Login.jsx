@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import Panel from '../../components/ui/Panel'
 import { Field } from '../../components/ui/FormField'
@@ -9,7 +9,6 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -19,9 +18,9 @@ export default function Login() {
     setLoading(false)
     if (signInError) {
       setError(signInError.message)
-      return
     }
-    navigate('/', { replace: true })
+    // On success, RedirectIfAuthed reacts to the session change and navigates —
+    // no imperative navigate() here (it would race the auth-state listener).
   }
 
   return (

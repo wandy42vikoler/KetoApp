@@ -5,11 +5,13 @@ import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
-import { Field, Select, SliderField } from '../../components/ui/FormField'
+import { Field, Select, ActivityLevelField, ACTIVITY_LEVELS } from '../../components/ui/FormField'
 
 const STEPS = ['basics', 'goals', 'generating', 'review']
 
 const EMPTY_MACROS = { calories: '', protein_g: '', fat_g: '', net_carbs_g: '' }
+
+const activityNumeric = (value) => ACTIVITY_LEVELS.find((a) => a.value === value)?.numeric ?? 6
 
 export default function Onboarding() {
   const { user, refreshProfile } = useAuth()
@@ -17,9 +19,9 @@ export default function Onboarding() {
   const [stepIndex, setStepIndex] = useState(0)
   const step = STEPS[stepIndex]
 
-  const [basics, setBasics] = useState({ height_cm: '', gender: 'female', activity_level: 5 })
+  const [basics, setBasics] = useState({ height_cm: '', gender: 'female', activity_level: 'moderate' })
   const [goals, setGoals] = useState({ starting_weight_kg: '', goal_weight_kg: '', goal_timeline_weeks: '' })
-  const [targets, setTargets] = useState({ rest: EMPTY_MACROS, activity: EMPTY_MACROS })
+  const [targets, setTargets] = useState(EMPTY_MACROS)
   const [generationError, setGenerationError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
@@ -36,14 +38,14 @@ export default function Onboarding() {
         body: {
           height_cm: Number(basics.height_cm),
           gender: basics.gender,
-          activity_level: Number(basics.activity_level),
+          activity_level: activityNumeric(basics.activity_level),
           starting_weight_kg: Number(goals.starting_weight_kg),
           goal_weight_kg: Number(goals.goal_weight_kg),
           goal_timeline_weeks: Number(goals.goal_timeline_weeks),
         },
       })
       if (error) throw error
-      setTargets({ rest: data.rest, activity: data.activity })
+      setTargets(data)
       goTo('review')
     } catch (err) {
       setGenerationError(err.message || 'Target generation failed.')
@@ -52,7 +54,7 @@ export default function Onboarding() {
 
   function skipToManualReview() {
     setGenerationError(null)
-    setTargets({ rest: EMPTY_MACROS, activity: EMPTY_MACROS })
+    setTargets(EMPTY_MACROS)
     goTo('review')
   }
 
@@ -67,7 +69,7 @@ export default function Onboarding() {
         .update({
           height_cm: Number(basics.height_cm),
           gender: basics.gender,
-          activity_level: Number(basics.activity_level),
+          activity_level: activityNumeric(basics.activity_level),
           starting_weight_kg: Number(goals.starting_weight_kg),
           goal_weight_kg: Number(goals.goal_weight_kg),
           goal_timeline_weeks: Number(goals.goal_timeline_weeks),
@@ -76,13 +78,19 @@ export default function Onboarding() {
         .eq('id', user.id)
       if (profileError) throw profileError
 
+      // Onboarding sets one baseline macro target. Rest vs. activity-day
+      // adjustment happens dynamically later from logged workout data — both
+      // day_type rows start identical so dashboard lookups always find a row.
+      const macros = {
+        calories: Number(targets.calories),
+        protein_g: Number(targets.protein_g),
+        fat_g: Number(targets.fat_g),
+        net_carbs_g: Number(targets.net_carbs_g),
+      }
       const rows = ['rest', 'activity'].map((day_type) => ({
         user_id: user.id,
         day_type,
-        calories: Number(targets[day_type].calories),
-        protein_g: Number(targets[day_type].protein_g),
-        fat_g: Number(targets[day_type].fat_g),
-        net_carbs_g: Number(targets[day_type].net_carbs_g),
+        ...macros,
       }))
       const { error: targetsError } = await supabase.from('targets').upsert(rows, { onConflict: 'user_id,day_type' })
       if (targetsError) throw targetsError
@@ -106,29 +114,14 @@ export default function Onboarding() {
 
         <StepDots current={stepIndex} total={STEPS.length} />
 
-        {step === 'basics' && (
-          <StepBasics
-            basics={basics}
-            setBasics={setBasics}
-            onNext={() => goTo('goals')}
-          />
-        )}
+        {step === 'basics' && <StepBasics basics={basics} setBasics={setBasics} onNext={() => goTo('goals')} />}
 
         {step === 'goals' && (
-          <StepGoals
-            goals={goals}
-            setGoals={setGoals}
-            onBack={() => goTo('basics')}
-            onNext={runGeneration}
-          />
+          <StepGoals goals={goals} setGoals={setGoals} onBack={() => goTo('basics')} onNext={runGeneration} />
         )}
 
         {step === 'generating' && (
-          <StepGenerating
-            error={generationError}
-            onRetry={runGeneration}
-            onSkip={skipToManualReview}
-          />
+          <StepGenerating error={generationError} onRetry={runGeneration} onSkip={skipToManualReview} />
         )}
 
         {step === 'review' && (
@@ -150,12 +143,7 @@ function StepDots({ current, total }) {
   return (
     <div className="flex justify-center gap-1.5 mb-6">
       {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          className={`h-1 rounded-full transition-all ${
-            i === current ? 'w-6 bg-signal' : 'w-1.5 bg-hairline-lit'
-          }`}
-        />
+        <div key={i} className={`h-1 rounded-full transition-all ${i === current ? 'w-6 bg-signal' : 'w-1.5 bg-hairline-lit'}`} />
       ))}
     </div>
   )
@@ -186,8 +174,7 @@ function StepBasics({ basics, setBasics, onNext }) {
             { value: 'other', label: 'Other' },
           ]}
         />
-        <SliderField
-          label="ACTIVITY LEVEL (BASELINE)"
+        <ActivityLevelField
           value={basics.activity_level}
           onChange={(v) => setBasics((b) => ({ ...b, activity_level: v }))}
         />
@@ -260,12 +247,9 @@ function StepGenerating({ error, onRetry, onSkip }) {
       {error ? (
         <>
           <Eyebrow>Generation Failed</Eyebrow>
-          <div className="font-mono text-[11px] text-alert mb-4 leading-relaxed">{error}</div>
+          <div className="font-mono text-[11px] text-alert mb-4 leading-relaxed whitespace-pre-wrap">{error}</div>
           <div className="flex gap-2">
-            <button
-              onClick={onRetry}
-              className="flex-1 bg-signal rounded-[9px] py-2.5 text-[#06150F] font-mono text-[12px] font-bold"
-            >
+            <button onClick={onRetry} className="flex-1 bg-signal rounded-[9px] py-2.5 text-[#06150F] font-mono text-[12px] font-bold">
               RETRY
             </button>
             <button
@@ -287,51 +271,36 @@ function StepGenerating({ error, onRetry, onSkip }) {
 }
 
 function StepReview({ targets, setTargets, onBack, onConfirm, saving, saveError }) {
-  function updateField(dayType, field, value) {
-    setTargets((t) => ({ ...t, [dayType]: { ...t[dayType], [field]: value } }))
+  function updateField(field, value) {
+    setTargets((t) => ({ ...t, [field]: value }))
   }
-
-  const rows = [
-    { key: 'rest', label: 'REST DAY' },
-    { key: 'activity', label: 'ACTIVITY DAY' },
-  ]
 
   return (
     <>
-      {rows.map((row) => (
-        <Panel key={row.key} className="mb-3">
-          <Eyebrow>{row.label} — Editable</Eyebrow>
-          <div className="grid grid-cols-2 gap-2.5">
-            <Field
-              label="CALORIES"
-              type="number"
-              value={targets[row.key].calories}
-              onChange={(v) => updateField(row.key, 'calories', v)}
-            />
-            <Field
-              label="PROTEIN"
-              type="number"
-              unit="g"
-              value={targets[row.key].protein_g}
-              onChange={(v) => updateField(row.key, 'protein_g', v)}
-            />
-            <Field
-              label="FAT"
-              type="number"
-              unit="g"
-              value={targets[row.key].fat_g}
-              onChange={(v) => updateField(row.key, 'fat_g', v)}
-            />
-            <Field
-              label="NET CARBS"
-              type="number"
-              unit="g"
-              value={targets[row.key].net_carbs_g}
-              onChange={(v) => updateField(row.key, 'net_carbs_g', v)}
-            />
-          </div>
-        </Panel>
-      ))}
+      <Panel className="mb-3">
+        <Eyebrow>Daily Targets — Editable</Eyebrow>
+        <div className="font-mono text-[10px] text-fg-dim mb-3 leading-relaxed">
+          Baseline macros. Activity-day adjustments are applied automatically later from logged workouts.
+        </div>
+        <div className="grid grid-cols-2 gap-2.5">
+          <Field label="CALORIES" type="number" value={targets.calories} onChange={(v) => updateField('calories', v)} />
+          <Field
+            label="PROTEIN"
+            type="number"
+            unit="g"
+            value={targets.protein_g}
+            onChange={(v) => updateField('protein_g', v)}
+          />
+          <Field label="FAT" type="number" unit="g" value={targets.fat_g} onChange={(v) => updateField('fat_g', v)} />
+          <Field
+            label="NET CARBS"
+            type="number"
+            unit="g"
+            value={targets.net_carbs_g}
+            onChange={(v) => updateField('net_carbs_g', v)}
+          />
+        </div>
+      </Panel>
 
       {saveError && <div className="font-mono text-[11px] text-alert mb-3">{saveError}</div>}
 

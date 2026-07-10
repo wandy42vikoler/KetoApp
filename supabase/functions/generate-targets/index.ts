@@ -6,8 +6,7 @@ const MODEL = 'claude-sonnet-5'
 
 const SYSTEM_PROMPT = `${COACH_VOICE}
 
-Calculate Targeted Ketogenic Diet (TKD) macro targets for a rest day and an
-activity day. Method:
+Calculate a baseline Targeted Ketogenic Diet (TKD) daily macro target. Method:
 1. BMR via Mifflin-St Jeor.
 2. Apply an activity multiplier derived from the user's self-reported
    activity_level (1-10).
@@ -15,12 +14,20 @@ activity day. Method:
    do not exceed a safe rate of loss (roughly 0.5-1% bodyweight/week); if the
    requested timeline implies an unsafe rate, use the safe rate instead and
    let the timeline run longer in practice.
-4. Split into TKD macros: high fat, moderate protein, very low carb on rest
-   days; activity days get higher calories and a modest carb allowance
-   timed around training to support performance, still net-carb-ceiling
-   constrained (TKD, not standard keto).
-5. Respond with strict JSON only, no markdown, no prose, matching exactly:
-{"rest":{"calories":number,"protein_g":number,"fat_g":number,"net_carbs_g":number},"activity":{"calories":number,"protein_g":number,"fat_g":number,"net_carbs_g":number}}`
+4. Split into TKD macros: high fat, moderate protein, very low net carbs.
+   This is the baseline (rest-day) target — activity-day adjustments are
+   applied later by the app from logged workout data, not by you.
+
+Respond with ONLY a raw JSON object, no markdown code fences, no prose,
+matching exactly this shape:
+{"calories":number,"protein_g":number,"fat_g":number,"net_carbs_g":number}`
+
+function extractJson(rawText: string): unknown {
+  const trimmed = rawText.trim()
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  const candidate = fenced ? fenced[1].trim() : trimmed
+  return JSON.parse(candidate)
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -65,8 +72,20 @@ Deno.serve(async (req) => {
     }
 
     const result = await response.json()
-    const rawText = result.content?.[0]?.text ?? ''
-    const targets = JSON.parse(rawText)
+    const rawText = result.content?.find((block: { type: string }) => block.type === 'text')?.text ?? ''
+
+    if (!rawText) {
+      throw new Error(
+        `Anthropic returned no text content (stop_reason: ${result.stop_reason}). Raw response: ${JSON.stringify(result).slice(0, 500)}`,
+      )
+    }
+
+    let targets: unknown
+    try {
+      targets = extractJson(rawText)
+    } catch {
+      throw new Error(`Could not parse JSON from model output: ${rawText.slice(0, 500)}`)
+    }
 
     return new Response(JSON.stringify(targets), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
