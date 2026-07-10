@@ -1,18 +1,23 @@
 import { useState } from 'react'
 import { Camera, Dumbbell, ClipboardList, ChevronRight } from 'lucide-react'
 import CheckIn from './CheckIn'
+import MealLog from './MealLog'
 
 const OPTIONS = [
-  { id: 'meal', label: 'Log Meal', sub: 'Photo → editable macros — next pass', icon: Camera, disabled: true },
+  { id: 'meal', label: 'Log Meal', sub: 'Photo → editable macros', icon: Camera, disabled: false },
   { id: 'workout', label: 'Log Workout', sub: 'Photo, manual, or Strava — next pass', icon: Dumbbell, disabled: true },
   { id: 'checkin', label: 'Check-In', sub: 'Scale photo or manual', icon: ClipboardList, disabled: false },
 ]
 
-export default function LogSheet({ onClose, onCheckinSaved }) {
+export default function LogSheet({ onClose, onCheckinSaved, onMealSaved }) {
   const [mode, setMode] = useState(null)
 
   if (mode === 'checkin') {
     return <CheckIn onBack={() => setMode(null)} onClose={onClose} onSaved={onCheckinSaved} />
+  }
+
+  if (mode === 'meal') {
+    return <MealLog onBack={() => setMode(null)} onClose={onClose} onSaved={onMealSaved} />
   }
 
   return (

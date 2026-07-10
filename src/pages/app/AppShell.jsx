@@ -12,7 +12,7 @@ export default function AppShell() {
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
-  function handleCheckinSaved() {
+  function handleRefresh() {
     setRefreshKey((k) => k + 1)
   }
 
@@ -27,8 +27,10 @@ export default function AppShell() {
 
       <BottomNav active={tab} onSelect={setTab} onFab={() => setSheetOpen(true)} />
 
-      {sheetOpen && <LogSheet onClose={() => setSheetOpen(false)} onCheckinSaved={handleCheckinSaved} />}
-      {checkinOpen && <CheckIn onClose={() => setCheckinOpen(false)} onSaved={handleCheckinSaved} />}
+      {sheetOpen && (
+        <LogSheet onClose={() => setSheetOpen(false)} onCheckinSaved={handleRefresh} onMealSaved={handleRefresh} />
+      )}
+      {checkinOpen && <CheckIn onClose={() => setCheckinOpen(false)} onSaved={handleRefresh} />}
     </div>
   )
 }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Moon, Droplet, Sparkles } from 'lucide-react'
+import { Moon, Droplet, Sparkles, Camera } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchTodayLog, fetchProgressSummary } from '../../lib/dailyLog'
+import { fetchTodayMeals, sumMealTotals } from '../../lib/meals'
 import { recommendedWaterLiters } from '../../lib/hydration'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
@@ -24,15 +25,26 @@ function computeEta(progress) {
 export default function Dashboard({ onOpenCheckIn, refreshKey }) {
   const { user, profile } = useAuth()
   const [log, setLog] = useState(null)
+  const [meals, setMeals] = useState([])
   const [target, setTarget] = useState(null)
   const [progress, setProgress] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const [scoring, setScoring] = useState(false)
+  const [scoreError, setScoreError] = useState(null)
+  const [scoreResult, setScoreResult] = useState(null)
+
   const load = useCallback(async () => {
     setLoading(true)
-    const [logRow, progressRow] = await Promise.all([fetchTodayLog(user.id), fetchProgressSummary(user.id)])
+    const [logRow, mealsRows, progressRow] = await Promise.all([
+      fetchTodayLog(user.id),
+      fetchTodayMeals(user.id),
+      fetchProgressSummary(user.id),
+    ])
     setLog(logRow)
+    setMeals(mealsRows)
     setProgress(progressRow)
+    setScoreResult(null)
 
     const dayType = logRow?.day_type ?? 'rest'
     const { data: targetRow } = await supabase
@@ -50,12 +62,30 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
     load()
   }, [load, refreshKey])
 
+  async function handleScoreDay() {
+    setScoring(true)
+    setScoreError(null)
+    try {
+      const { data, error } = await supabase.functions.invoke('score-meal-day', {
+        body: { meals, target },
+      })
+      if (error) throw error
+      setScoreResult(data)
+      if (log?.id) {
+        await supabase.from('daily_logs').update({ meal_score: data.score }).eq('id', log.id)
+      }
+    } catch (err) {
+      setScoreError(err.message || 'Scoring failed.')
+    } finally {
+      setScoring(false)
+    }
+  }
+
   if (loading) {
     return <div className="font-mono text-[11px] text-fg-dim text-center py-10">LOADING…</div>
   }
 
-  // No meal logging yet — totals are honestly 0 rather than faked.
-  const totals = { calories: 0, protein: 0, fat: 0, carbs: 0 }
+  const totals = sumMealTotals(meals)
   const carbStatus = target && totals.carbs > target.net_carbs_g ? 'BREACH' : 'COMPLIANT'
   const eta = computeEta(progress)
   const waterTarget = recommendedWaterLiters(
@@ -111,6 +141,32 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
         </Panel>
       )}
 
+      {meals.length > 0 && target && (
+        <Panel className="mb-3.5">
+          {scoreResult ? (
+            <>
+              <Eyebrow
+                right={
+                  <span className="font-mono text-[14px] font-bold text-signal">{scoreResult.score}/10</span>
+                }
+              >
+                Meal Day Score
+              </Eyebrow>
+              <div className="text-[12.5px] text-fg leading-relaxed">{scoreResult.justification}</div>
+            </>
+          ) : (
+            <button
+              onClick={handleScoreDay}
+              disabled={scoring}
+              className="w-full bg-transparent border border-dashed border-hairline-lit disabled:opacity-50 rounded-[9px] py-2.5 text-info font-mono text-[11.5px] tracking-wide flex items-center justify-center gap-1.5"
+            >
+              <Sparkles size={13} /> {scoring ? 'SCORING…' : 'SCORE MY DAY'}
+            </button>
+          )}
+          {scoreError && <div className="font-mono text-[11px] text-alert mt-2.5">{scoreError}</div>}
+        </Panel>
+      )}
+
       {log?.ai_note && (
         <Panel className="mb-3.5 border-l-2 border-info">
           <Eyebrow>
@@ -144,13 +200,14 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
 
       <Panel>
         <Eyebrow>Today's Log</Eyebrow>
+
         {log ? (
-          <div className="text-[12.5px] text-fg leading-relaxed font-mono">
+          <div className="text-[12.5px] text-fg leading-relaxed font-mono pb-2.5 mb-1 border-b border-hairline">
             {log.weight_kg ? `${log.weight_kg}kg` : 'no weight'} ·{' '}
             {log.body_fat_pct ? `${log.body_fat_pct}% BF` : 'no BF%'}
           </div>
         ) : (
-          <div className="text-center py-4">
+          <div className="text-center py-4 border-b border-hairline mb-1">
             <div className="font-mono text-[11px] text-fg-dim mb-3">No check-in logged today.</div>
             <button
               onClick={onOpenCheckIn}
@@ -159,6 +216,29 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
               LOG CHECK-IN
             </button>
           </div>
+        )}
+
+        {meals.length > 0 ? (
+          meals.map((m) => (
+            <div key={m.id} className="flex gap-2.5 py-2 border-b border-hairline last:border-b-0">
+              <div className="w-[26px] h-[26px] rounded-[7px] bg-[#1B2422] flex items-center justify-center flex-shrink-0">
+                <Camera size={12} className="text-info" />
+              </div>
+              <div className="flex-1">
+                <div className="flex justify-between">
+                  <span className="text-[12.5px] text-fg">{m.description || 'Meal'}</span>
+                  <span className="font-mono text-[10.5px] text-fg-dim">
+                    {new Date(m.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div className="font-mono text-[10.5px] text-fg-dim">
+                  P{m.protein_g ?? 0} · F{m.fat_g ?? 0} · C{m.net_carbs_g ?? 0} · {m.calories ?? 0}kcal
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="font-mono text-[11px] text-fg-dim text-center py-3">No meals logged yet today.</div>
         )}
       </Panel>
     </div>
