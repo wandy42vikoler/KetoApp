@@ -26,3 +26,14 @@ export async function insertWorkout(userId, dailyLogId, fields) {
   if (error) throw error
   return data
 }
+
+export async function updateWorkout(workoutId, fields) {
+  const { data, error } = await supabase.from('workouts').update(fields).eq('id', workoutId).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteWorkout(workoutId) {
+  const { error } = await supabase.from('workouts').delete().eq('id', workoutId)
+  if (error) throw error
+}

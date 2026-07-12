@@ -27,6 +27,17 @@ export async function insertMeal(userId, dailyLogId, fields) {
   return data
 }
 
+export async function updateMeal(mealId, fields) {
+  const { data, error } = await supabase.from('meals').update(fields).eq('id', mealId).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteMeal(mealId) {
+  const { error } = await supabase.from('meals').delete().eq('id', mealId)
+  if (error) throw error
+}
+
 export function sumMealTotals(meals) {
   return meals.reduce(
     (acc, m) => ({

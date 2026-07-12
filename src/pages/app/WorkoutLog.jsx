@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Camera, Check, Plus, X } from 'lucide-react'
+import { Camera, Check, Plus, X, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
-import { upsertTodayLog } from '../../lib/dailyLog'
-import { insertWorkout } from '../../lib/workouts'
+import { upsertLogForDate, todayDateString } from '../../lib/dailyLog'
+import { insertWorkout, updateWorkout, deleteWorkout } from '../../lib/workouts'
 import { fileToBase64 } from '../../lib/image'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
@@ -12,10 +12,24 @@ import { Field } from '../../components/ui/FormField'
 
 const EMPTY_FIELDS = { activity_name: '', duration_minutes: '', exercises: [] }
 
-export default function WorkoutLog({ onBack, onClose, onSaved }) {
+function fieldsFromWorkout(workout) {
+  return {
+    activity_name: workout.activity_name ?? '',
+    duration_minutes: workout.duration_minutes ?? '',
+    exercises: (workout.exercises ?? []).map((ex) => ({
+      name: ex.name ?? '',
+      sets: (ex.sets ?? []).map((s) => ({ reps: s.reps ?? '', weight_kg: s.weight_kg ?? '' })),
+    })),
+  }
+}
+
+export default function WorkoutLog({ date, workout, onBack, onClose, onSaved }) {
   const { user } = useAuth()
+  const logDate = date ?? todayDateString()
+  const isEditing = Boolean(workout?.id)
+
   const [mode, setMode] = useState('photo')
-  const [fields, setFields] = useState(EMPTY_FIELDS)
+  const [fields, setFields] = useState(() => (isEditing ? fieldsFromWorkout(workout) : EMPTY_FIELDS))
   const [rawExtraction, setRawExtraction] = useState(null)
 
   const [analyzing, setAnalyzing] = useState(false)
@@ -24,6 +38,8 @@ export default function WorkoutLog({ onBack, onClose, onSaved }) {
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   function updateField(key, value) {
     setFields((f) => ({ ...f, [key]: value }))
@@ -98,36 +114,49 @@ export default function WorkoutLog({ onBack, onClose, onSaved }) {
     }
   }
 
+  function packExercises() {
+    return fields.exercises
+      .filter((ex) => ex.name)
+      .map((ex) => ({
+        name: ex.name,
+        sets: ex.sets
+          .filter((s) => s.reps !== '' || s.weight_kg !== '')
+          .map((s) => ({
+            reps: s.reps === '' ? null : Number(s.reps),
+            weight_kg: s.weight_kg === '' ? null : Number(s.weight_kg),
+          })),
+      }))
+  }
+
   async function handleSave() {
     setSaving(true)
     setSaveError(null)
     try {
-      // Ensure today's daily_logs row exists before we can link the workout.
-      const dailyLog = await upsertTodayLog(user.id, {})
-
-      const exercises = fields.exercises
-        .filter((ex) => ex.name)
-        .map((ex) => ({
-          name: ex.name,
-          sets: ex.sets
-            .filter((s) => s.reps !== '' || s.weight_kg !== '')
-            .map((s) => ({
-              reps: s.reps === '' ? null : Number(s.reps),
-              weight_kg: s.weight_kg === '' ? null : Number(s.weight_kg),
-            })),
-        }))
-
-      await insertWorkout(user.id, dailyLog.id, {
-        source: mode === 'photo' ? 'photo' : 'manual',
+      const exercises = packExercises()
+      const activityFields = {
         activity_name: fields.activity_name || 'Workout',
         duration_minutes: fields.duration_minutes === '' ? null : Number(fields.duration_minutes),
         exercises: exercises.length > 0 ? exercises : null,
-        raw_ai_extraction: mode === 'photo' ? rawExtraction : null,
-      })
+      }
 
-      // day_type is derived from whether a workouts row exists today — the
-      // ensure-call above ran before this insert, so re-derive now that it does.
-      await upsertTodayLog(user.id, {})
+      if (isEditing) {
+        await updateWorkout(workout.id, activityFields)
+      } else {
+        // Ensure the daily_logs row exists before we can link the workout.
+        const dailyLog = await upsertLogForDate(user.id, logDate, {})
+        const loggedAt = logDate === todayDateString() ? undefined : `${logDate}T12:00:00`
+
+        await insertWorkout(user.id, dailyLog.id, {
+          ...activityFields,
+          source: mode === 'photo' ? 'photo' : 'manual',
+          raw_ai_extraction: mode === 'photo' ? rawExtraction : null,
+          ...(loggedAt ? { logged_at: loggedAt } : {}),
+        })
+
+        // day_type is derived from whether a workouts row exists that day —
+        // the ensure-call above ran before this insert, so re-derive now.
+        await upsertLogForDate(user.id, logDate, {})
+      }
 
       onSaved?.()
       onClose()
@@ -138,33 +167,50 @@ export default function WorkoutLog({ onBack, onClose, onSaved }) {
     }
   }
 
-  const showForm = mode === 'manual' || extracted
+  async function handleDelete() {
+    setDeleting(true)
+    setSaveError(null)
+    try {
+      await deleteWorkout(workout.id)
+      // Removing the last workout of the day should revert day_type to 'rest'.
+      await upsertLogForDate(user.id, logDate, {})
+      onSaved?.()
+      onClose()
+    } catch (err) {
+      setSaveError(err.message || 'Could not delete workout.')
+      setDeleting(false)
+    }
+  }
+
+  const showForm = isEditing || mode === 'manual' || extracted
 
   return (
     <div className="absolute inset-0 bg-bg z-20 flex flex-col overflow-y-auto">
-      <SheetHeader title="LOG WORKOUT" onBack={onBack} onClose={onClose} />
+      <SheetHeader title={isEditing ? 'EDIT WORKOUT' : 'LOG WORKOUT'} onBack={onBack} onClose={onClose} />
       <div className="px-4 pb-8">
-        <div className="flex gap-2 mb-3.5">
-          {['photo', 'manual'].map((m) => (
+        {!isEditing && (
+          <div className="flex gap-2 mb-3.5">
+            {['photo', 'manual'].map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`flex-1 py-2 rounded-[8px] font-mono text-[10.5px] tracking-wide border ${
+                  mode === m ? 'border-signal bg-signal-dim/40 text-signal' : 'border-hairline text-fg-muted'
+                }`}
+              >
+                {m.toUpperCase()}
+              </button>
+            ))}
             <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`flex-1 py-2 rounded-[8px] font-mono text-[10.5px] tracking-wide border ${
-                mode === m ? 'border-signal bg-signal-dim/40 text-signal' : 'border-hairline text-fg-muted'
-              }`}
+              disabled
+              className="flex-1 py-2 rounded-[8px] font-mono text-[10.5px] tracking-wide border border-hairline text-fg-dim opacity-40"
             >
-              {m.toUpperCase()}
+              STRAVA
             </button>
-          ))}
-          <button
-            disabled
-            className="flex-1 py-2 rounded-[8px] font-mono text-[10.5px] tracking-wide border border-hairline text-fg-dim opacity-40"
-          >
-            STRAVA
-          </button>
-        </div>
+          </div>
+        )}
 
-        {mode === 'photo' && !extracted && (
+        {!isEditing && mode === 'photo' && !extracted && (
           <Panel className="mb-3.5">
             <Eyebrow>Training App Screenshot</Eyebrow>
             <label className="block h-[150px] rounded-[10px] border border-dashed border-hairline-lit flex items-center justify-center cursor-pointer">
@@ -185,7 +231,7 @@ export default function WorkoutLog({ onBack, onClose, onSaved }) {
         {showForm && (
           <>
             <Panel className="mb-3.5">
-              <Eyebrow>{mode === 'photo' ? 'AI-Extracted — Editable' : 'Manual Entry'}</Eyebrow>
+              <Eyebrow>{isEditing ? 'Editable' : mode === 'photo' ? 'AI-Extracted — Editable' : 'Manual Entry'}</Eyebrow>
               <div className="flex flex-col gap-3">
                 <Field
                   label="ACTIVITY NAME"
@@ -275,8 +321,37 @@ export default function WorkoutLog({ onBack, onClose, onSaved }) {
               disabled={saving}
               className="w-full bg-signal disabled:opacity-40 rounded-[9px] py-2.5 text-[#06150F] font-mono text-[12px] font-bold flex items-center justify-center gap-1.5"
             >
-              <Check size={14} /> {saving ? 'SAVING…' : 'CONFIRM & LOG'}
+              <Check size={14} /> {saving ? 'SAVING…' : isEditing ? 'UPDATE WORKOUT' : 'CONFIRM & LOG'}
             </button>
+
+            {isEditing && (
+              <div className="mt-2.5">
+                {confirmingDelete ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmingDelete(false)}
+                      className="flex-1 bg-transparent border border-hairline-lit rounded-[9px] py-2.5 text-fg-muted font-mono text-[11.5px]"
+                    >
+                      CANCEL
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="flex-1 bg-alert-dim border border-alert disabled:opacity-50 rounded-[9px] py-2.5 text-alert font-mono text-[11.5px] font-bold"
+                    >
+                      {deleting ? 'DELETING…' : 'CONFIRM DELETE'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmingDelete(true)}
+                    className="w-full bg-transparent border-none text-alert font-mono text-[11px] py-1 flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 size={12} /> DELETE WORKOUT
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

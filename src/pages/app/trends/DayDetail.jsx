@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Dumbbell, Pencil } from 'lucide-react'
+import { Camera, Dumbbell, Pencil, Plus } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
 import { fetchLogForDate } from '../../../lib/dailyLog'
 import { fetchMealsForDate, sumMealTotals } from '../../../lib/meals'
@@ -7,7 +7,7 @@ import { fetchWorkoutsForDate } from '../../../lib/workouts'
 import Panel from '../../../components/ui/Panel'
 import Eyebrow from '../../../components/ui/Eyebrow'
 
-export default function DayDetail({ date, onEditCheckIn }) {
+export default function DayDetail({ date, onEditCheckIn, onAddMeal, onEditMeal, onAddWorkout, onEditWorkout }) {
   const { user } = useAuth()
   const [log, setLog] = useState(null)
   const [meals, setMeals] = useState([])
@@ -80,23 +80,66 @@ export default function DayDetail({ date, onEditCheckIn }) {
       {log?.notes && <div className="font-mono text-[10.5px] text-fg-dim mb-2">{log.notes}</div>}
 
       {meals.length > 0 && (
-        <div className="font-mono text-[10.5px] text-fg-dim mb-2">
+        <div className="font-mono text-[10px] text-fg-dim mb-1.5 pt-2 border-t border-hairline">
           {meals.length} meal{meals.length > 1 ? 's' : ''} · {totals.calories}kcal · P{totals.protein} F{totals.fat} C
           {totals.carbs}
         </div>
       )}
 
-      {workouts.length > 0 &&
-        workouts.map((w) => (
-          <div key={w.id} className="flex items-center gap-2 font-mono text-[10.5px] text-fg-dim mb-1">
-            <Dumbbell size={11} className="text-signal" /> {w.activity_name}
-            {w.duration_minutes ? ` · ${w.duration_minutes}min` : ''}
+      {meals.map((m) => (
+        <button
+          key={m.id}
+          onClick={() => onEditMeal(date, m)}
+          className="w-full flex items-center gap-2.5 py-1.5 text-left bg-transparent border-none"
+        >
+          <div className="w-[22px] h-[22px] rounded-[6px] bg-[#1B2422] flex items-center justify-center flex-shrink-0">
+            <Camera size={11} className="text-info" />
           </div>
-        ))}
+          <div className="flex-1 min-w-0">
+            <div className="text-[12px] text-fg truncate">{m.description || 'Meal'}</div>
+            <div className="font-mono text-[10px] text-fg-dim">
+              P{m.protein_g ?? 0} · F{m.fat_g ?? 0} · C{m.net_carbs_g ?? 0} · {m.calories ?? 0}kcal
+            </div>
+          </div>
+          <Pencil size={11} className="text-fg-dim flex-shrink-0" />
+        </button>
+      ))}
 
-      {meals.length === 0 && workouts.length === 0 && !log && (
-        <div className="font-mono text-[10.5px] text-fg-dim text-center py-2">Nothing logged this day.</div>
-      )}
+      <button
+        onClick={() => onAddMeal(date)}
+        className="w-full flex items-center gap-2 py-2 mt-1 font-mono text-[10.5px] text-info bg-transparent border-none"
+      >
+        <Plus size={12} /> ADD MEAL
+      </button>
+
+      {workouts.length > 0 && <div className="pt-1.5 border-t border-hairline" />}
+
+      {workouts.map((w) => (
+        <button
+          key={w.id}
+          onClick={() => onEditWorkout(date, w)}
+          className="w-full flex items-center gap-2.5 py-1.5 text-left bg-transparent border-none"
+        >
+          <div className="w-[22px] h-[22px] rounded-[6px] bg-signal-dim flex items-center justify-center flex-shrink-0">
+            <Dumbbell size={11} className="text-signal" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[12px] text-fg truncate">{w.activity_name}</div>
+            <div className="font-mono text-[10px] text-fg-dim">
+              {w.duration_minutes ? `${w.duration_minutes}min` : 'duration n/a'}
+              {w.exercises?.length ? ` · ${w.exercises.length} exercise${w.exercises.length > 1 ? 's' : ''}` : ''}
+            </div>
+          </div>
+          <Pencil size={11} className="text-fg-dim flex-shrink-0" />
+        </button>
+      ))}
+
+      <button
+        onClick={() => onAddWorkout(date)}
+        className="w-full flex items-center gap-2 py-2 mt-1 font-mono text-[10.5px] text-info bg-transparent border-none"
+      >
+        <Plus size={12} /> ADD WORKOUT
+      </button>
     </Panel>
   )
 }

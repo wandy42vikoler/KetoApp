@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Camera, Check } from 'lucide-react'
+import { Camera, Check, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
-import { upsertTodayLog } from '../../lib/dailyLog'
-import { insertMeal } from '../../lib/meals'
+import { upsertLogForDate, todayDateString } from '../../lib/dailyLog'
+import { insertMeal, updateMeal, deleteMeal } from '../../lib/meals'
 import { fileToBase64 } from '../../lib/image'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
@@ -18,12 +18,25 @@ const EMPTY_FIELDS = {
   calories: '',
 }
 
-export default function MealLog({ onBack, onClose, onSaved }) {
+function fieldsFromMeal(meal) {
+  return {
+    description: meal.description ?? '',
+    protein_g: meal.protein_g ?? '',
+    fat_g: meal.fat_g ?? '',
+    net_carbs_g: meal.net_carbs_g ?? '',
+    calories: meal.calories ?? '',
+  }
+}
+
+export default function MealLog({ date, meal, onBack, onClose, onSaved }) {
   const { user } = useAuth()
+  const logDate = date ?? todayDateString()
+  const isEditing = Boolean(meal?.id)
+
   const [mode, setMode] = useState('photo')
-  const [fields, setFields] = useState(EMPTY_FIELDS)
-  const [confidence, setConfidence] = useState('manual')
-  const [notes, setNotes] = useState(null)
+  const [fields, setFields] = useState(() => (isEditing ? fieldsFromMeal(meal) : EMPTY_FIELDS))
+  const [confidence, setConfidence] = useState(meal?.confidence ?? 'manual')
+  const [notes, setNotes] = useState(meal?.ai_notes ?? null)
   const [photoContext, setPhotoContext] = useState('')
 
   const [analyzing, setAnalyzing] = useState(false)
@@ -32,6 +45,8 @@ export default function MealLog({ onBack, onClose, onSaved }) {
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   function updateField(key, value) {
     setFields((f) => ({ ...f, [key]: value }))
@@ -69,16 +84,26 @@ export default function MealLog({ onBack, onClose, onSaved }) {
     setSaving(true)
     setSaveError(null)
     try {
-      const dailyLog = await upsertTodayLog(user.id, {})
-      await insertMeal(user.id, dailyLog.id, {
+      const macroFields = {
         description: fields.description || null,
         protein_g: fields.protein_g === '' ? null : Number(fields.protein_g),
         fat_g: fields.fat_g === '' ? null : Number(fields.fat_g),
         net_carbs_g: fields.net_carbs_g === '' ? null : Number(fields.net_carbs_g),
         calories: fields.calories === '' ? null : Number(fields.calories),
-        confidence: mode === 'manual' ? 'manual' : confidence,
-        ai_notes: notes,
-      })
+      }
+
+      if (isEditing) {
+        await updateMeal(meal.id, macroFields)
+      } else {
+        const dailyLog = await upsertLogForDate(user.id, logDate, {})
+        const loggedAt = logDate === todayDateString() ? undefined : `${logDate}T12:00:00`
+        await insertMeal(user.id, dailyLog.id, {
+          ...macroFields,
+          confidence: mode === 'manual' ? 'manual' : confidence,
+          ai_notes: notes,
+          ...(loggedAt ? { logged_at: loggedAt } : {}),
+        })
+      }
       onSaved?.()
       onClose()
     } catch (err) {
@@ -88,27 +113,42 @@ export default function MealLog({ onBack, onClose, onSaved }) {
     }
   }
 
-  const showForm = mode === 'manual' || extracted
+  async function handleDelete() {
+    setDeleting(true)
+    setSaveError(null)
+    try {
+      await deleteMeal(meal.id)
+      onSaved?.()
+      onClose()
+    } catch (err) {
+      setSaveError(err.message || 'Could not delete meal.')
+      setDeleting(false)
+    }
+  }
+
+  const showForm = isEditing || mode === 'manual' || extracted
 
   return (
     <div className="absolute inset-0 bg-bg z-20 flex flex-col overflow-y-auto">
-      <SheetHeader title="LOG MEAL" onBack={onBack} onClose={onClose} />
+      <SheetHeader title={isEditing ? 'EDIT MEAL' : 'LOG MEAL'} onBack={onBack} onClose={onClose} />
       <div className="px-4 pb-8">
-        <div className="flex gap-2 mb-3.5">
-          {['photo', 'manual'].map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`flex-1 py-2 rounded-[8px] font-mono text-[10.5px] tracking-wide border ${
-                mode === m ? 'border-signal bg-signal-dim/40 text-signal' : 'border-hairline text-fg-muted'
-              }`}
-            >
-              {m.toUpperCase()}
-            </button>
-          ))}
-        </div>
+        {!isEditing && (
+          <div className="flex gap-2 mb-3.5">
+            {['photo', 'manual'].map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`flex-1 py-2 rounded-[8px] font-mono text-[10.5px] tracking-wide border ${
+                  mode === m ? 'border-signal bg-signal-dim/40 text-signal' : 'border-hairline text-fg-muted'
+                }`}
+              >
+                {m.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {mode === 'photo' && !extracted && (
+        {!isEditing && mode === 'photo' && !extracted && (
           <Panel className="mb-3.5">
             <Eyebrow>Meal Photo</Eyebrow>
             <label className="block h-[150px] rounded-[10px] border border-dashed border-hairline-lit flex items-center justify-center cursor-pointer">
@@ -140,12 +180,12 @@ export default function MealLog({ onBack, onClose, onSaved }) {
             <Panel className="mb-3.5">
               <Eyebrow
                 right={
-                  mode === 'photo' ? (
+                  !isEditing && mode === 'photo' ? (
                     <span className="font-mono text-[10px] text-caution">CONFIDENCE: {confidence.toUpperCase()}</span>
                   ) : null
                 }
               >
-                {mode === 'photo' ? 'AI Estimate — Editable' : 'Manual Entry'}
+                {isEditing ? 'Editable' : mode === 'photo' ? 'AI Estimate — Editable' : 'Manual Entry'}
               </Eyebrow>
 
               <div className="mb-3">
@@ -192,8 +232,37 @@ export default function MealLog({ onBack, onClose, onSaved }) {
               disabled={saving}
               className="w-full bg-signal disabled:opacity-40 rounded-[9px] py-2.5 text-[#06150F] font-mono text-[12px] font-bold flex items-center justify-center gap-1.5"
             >
-              <Check size={14} /> {saving ? 'SAVING…' : 'ADD TO LOG'}
+              <Check size={14} /> {saving ? 'SAVING…' : isEditing ? 'UPDATE MEAL' : 'ADD TO LOG'}
             </button>
+
+            {isEditing && (
+              <div className="mt-2.5">
+                {confirmingDelete ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmingDelete(false)}
+                      className="flex-1 bg-transparent border border-hairline-lit rounded-[9px] py-2.5 text-fg-muted font-mono text-[11.5px]"
+                    >
+                      CANCEL
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="flex-1 bg-alert-dim border border-alert disabled:opacity-50 rounded-[9px] py-2.5 text-alert font-mono text-[11.5px] font-bold"
+                    >
+                      {deleting ? 'DELETING…' : 'CONFIRM DELETE'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmingDelete(true)}
+                    className="w-full bg-transparent border-none text-alert font-mono text-[11px] py-1 flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 size={12} /> DELETE MEAL
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

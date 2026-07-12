@@ -6,6 +6,8 @@ import DayDetail from './trends/DayDetail'
 import WeightChart from './trends/WeightChart'
 import SleepEnergyChart from './trends/SleepEnergyChart'
 import CheckIn from './CheckIn'
+import MealLog from './MealLog'
+import WorkoutLog from './WorkoutLog'
 
 function monthRange(monthDate) {
   const year = monthDate.getFullYear()
@@ -25,8 +27,11 @@ export default function TrendsScreen() {
   const [chartLogs, setChartLogs] = useState([])
   const [progress, setProgress] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [editingDate, setEditingDate] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  const [checkInDate, setCheckInDate] = useState(null)
+  const [mealSheet, setMealSheet] = useState(null) // { date, meal? }
+  const [workoutSheet, setWorkoutSheet] = useState(null) // { date, workout? }
 
   const loadMonth = useCallback(async () => {
     const { start, end } = monthRange(monthDate)
@@ -51,7 +56,7 @@ export default function TrendsScreen() {
     monthLogs.map((l) => [l.log_date, { hasLog: true, mealScore: l.meal_score }]),
   )
 
-  function handleCheckInSaved() {
+  function handleDataSaved() {
     setRefreshKey((k) => k + 1)
   }
 
@@ -73,7 +78,17 @@ export default function TrendsScreen() {
         />
       </div>
 
-      {selectedDate && <DayDetail date={selectedDate} onEditCheckIn={setEditingDate} key={`${selectedDate}-${refreshKey}`} />}
+      {selectedDate && (
+        <DayDetail
+          date={selectedDate}
+          key={`${selectedDate}-${refreshKey}`}
+          onEditCheckIn={setCheckInDate}
+          onAddMeal={(date) => setMealSheet({ date })}
+          onEditMeal={(date, meal) => setMealSheet({ date, meal })}
+          onAddWorkout={(date) => setWorkoutSheet({ date })}
+          onEditWorkout={(date, workout) => setWorkoutSheet({ date, workout })}
+        />
+      )}
 
       {loading ? (
         <div className="font-mono text-[11px] text-fg-dim text-center py-10">LOADING…</div>
@@ -84,12 +99,32 @@ export default function TrendsScreen() {
         </>
       )}
 
-      {editingDate && (
+      {checkInDate && (
         <CheckIn
-          date={editingDate}
-          onBack={() => setEditingDate(null)}
-          onClose={() => setEditingDate(null)}
-          onSaved={handleCheckInSaved}
+          date={checkInDate}
+          onBack={() => setCheckInDate(null)}
+          onClose={() => setCheckInDate(null)}
+          onSaved={handleDataSaved}
+        />
+      )}
+
+      {mealSheet && (
+        <MealLog
+          date={mealSheet.date}
+          meal={mealSheet.meal}
+          onBack={() => setMealSheet(null)}
+          onClose={() => setMealSheet(null)}
+          onSaved={handleDataSaved}
+        />
+      )}
+
+      {workoutSheet && (
+        <WorkoutLog
+          date={workoutSheet.date}
+          workout={workoutSheet.workout}
+          onBack={() => setWorkoutSheet(null)}
+          onClose={() => setWorkoutSheet(null)}
+          onSaved={handleDataSaved}
         />
       )}
     </div>
