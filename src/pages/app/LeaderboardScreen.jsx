@@ -76,8 +76,8 @@ export default function LeaderboardScreen({ onClose }) {
               Join the Leaderboard
             </Eyebrow>
             <div className="text-[12.5px] text-fg leading-relaxed mb-3.5">
-              Shares your display name, % progress to goal, kg lost, and average meal score with other opted-in
-              users. Your weight, height, meals, and workouts are never shared — only these four values.
+              Shares your display name, % progress to goal, and kg lost with other opted-in users. Your weight,
+              height, meals, and workouts are never shared — only these three values.
             </div>
             <div className="mb-3.5">
               <Field
@@ -133,7 +133,6 @@ export default function LeaderboardScreen({ onClose }) {
                             {row.achieved
                               ? `ACHIEVED · -${row.total_lost_kg}kg`
                               : `${row.progress_pct ?? 0}% · -${row.total_lost_kg ?? 0}kg`}
-                            {row.avg_meal_score != null && ` · meal score ${Number(row.avg_meal_score).toFixed(1)}`}
                           </div>
                         </div>
                       </div>
