@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
       content: m.text,
     }))
 
-    const reply = await callClaudeMessages(system, anthropicMessages, 1024)
+    const reply = await callClaudeMessages(system, anthropicMessages, 2048)
 
     return new Response(JSON.stringify({ reply }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
