@@ -6,6 +6,7 @@ import { fetchTodayLog, fetchProgressSummary } from '../../lib/dailyLog'
 import { fetchTodayMeals, sumMealTotals } from '../../lib/meals'
 import { fetchTodayWorkouts } from '../../lib/workouts'
 import { recommendedWaterLiters } from '../../lib/hydration'
+import { protocolDayNumber } from '../../lib/protocolDay'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
 import Stamp from '../../components/ui/Stamp'
@@ -105,6 +106,9 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
           <div className="text-xl font-bold text-fg">Welcome back</div>
         </div>
         <div className="font-mono text-[10.5px] text-fg-dim text-right">
+          {protocolDayNumber(profile?.protocol_start_date) != null && (
+            <>DAY {protocolDayNumber(profile?.protocol_start_date)}<br /></>
+          )}
           <span className="text-info">{(log?.day_type ?? 'rest').toUpperCase()}</span>
         </div>
       </div>
@@ -206,9 +210,14 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
         <Eyebrow>Today's Log</Eyebrow>
 
         {log ? (
-          <div className="text-[12.5px] text-fg leading-relaxed font-mono pb-2.5 mb-1 border-b border-hairline">
-            {log.weight_kg ? `${log.weight_kg}kg` : 'no weight'} ·{' '}
-            {log.body_fat_pct ? `${log.body_fat_pct}% BF` : 'no BF%'}
+          <div className="flex justify-between items-center pb-2.5 mb-1 border-b border-hairline">
+            <div className="text-[12.5px] text-fg leading-relaxed font-mono">
+              {log.weight_kg ? `${log.weight_kg}kg` : 'no weight'} ·{' '}
+              {log.body_fat_pct ? `${log.body_fat_pct}% BF` : 'no BF%'}
+            </div>
+            <button onClick={onOpenCheckIn} className="font-mono text-[10.5px] text-info bg-transparent border-none">
+              EDIT
+            </button>
           </div>
         ) : (
           <div className="text-center py-4 border-b border-hairline mb-1">

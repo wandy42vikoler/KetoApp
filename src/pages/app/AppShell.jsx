@@ -3,6 +3,7 @@ import BottomNav from '../../components/nav/BottomNav'
 import Panel from '../../components/ui/Panel'
 import Dashboard from './Dashboard'
 import TargetsScreen from './TargetsScreen'
+import TrendsScreen from './TrendsScreen'
 import LogSheet from './LogSheet'
 import CheckIn from './CheckIn'
 
@@ -20,7 +21,7 @@ export default function AppShell() {
     <div className="min-h-screen bg-bg bg-vignette relative">
       <div className="px-4 pt-6 pb-[100px] max-w-md mx-auto">
         {tab === 'home' && <Dashboard onOpenCheckIn={() => setCheckinOpen(true)} refreshKey={refreshKey} />}
-        {tab === 'trends' && <ComingSoon title="Telemetry" label="Trends" />}
+        {tab === 'trends' && <TrendsScreen />}
         {tab === 'coach' && <ComingSoon title="Live Context Loaded" label="Coach" />}
         {tab === 'targets' && <TargetsScreen />}
       </div>

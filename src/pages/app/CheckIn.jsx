@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Camera, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
-import { fetchTodayLog, fetchRecentLogs, upsertTodayLog, todayDateString } from '../../lib/dailyLog'
+import { fetchLogForDate, fetchRecentLogs, upsertLogForDate, todayDateString } from '../../lib/dailyLog'
 import { fileToBase64 } from '../../lib/image'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
@@ -19,11 +19,15 @@ const EMPTY_FIELDS = {
   notes: '',
 }
 
-export default function CheckIn({ onBack, onClose, onSaved }) {
+export default function CheckIn({ date, onBack, onClose, onSaved }) {
   const { user } = useAuth()
+  const logDate = date ?? todayDateString()
+  const isToday = logDate === todayDateString()
+
   const [mode, setMode] = useState('manual')
   const [fields, setFields] = useState(EMPTY_FIELDS)
   const [loadingExisting, setLoadingExisting] = useState(true)
+  const [isEditing, setIsEditing] = useState(false)
 
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState(null)
@@ -34,9 +38,10 @@ export default function CheckIn({ onBack, onClose, onSaved }) {
 
   useEffect(() => {
     let active = true
-    fetchTodayLog(user.id)
+    fetchLogForDate(user.id, logDate)
       .then((existing) => {
         if (!active || !existing) return
+        setIsEditing(true)
         setFields((f) => ({
           ...f,
           weight_kg: existing.weight_kg ?? '',
@@ -54,7 +59,7 @@ export default function CheckIn({ onBack, onClose, onSaved }) {
     return () => {
       active = false
     }
-  }, [user.id])
+  }, [user.id, logDate])
 
   function updateField(key, value) {
     setFields((f) => ({ ...f, [key]: value }))
@@ -91,7 +96,7 @@ export default function CheckIn({ onBack, onClose, onSaved }) {
     try {
       const recent = await fetchRecentLogs(user.id, 7)
 
-      const saved = await upsertTodayLog(user.id, {
+      const saved = await upsertLogForDate(user.id, logDate, {
         weight_kg: fields.weight_kg === '' ? null : Number(fields.weight_kg),
         body_fat_pct: fields.body_fat_pct === '' ? null : Number(fields.body_fat_pct),
         muscle_mass_kg: fields.muscle_mass_kg === '' ? null : Number(fields.muscle_mass_kg),
@@ -101,18 +106,20 @@ export default function CheckIn({ onBack, onClose, onSaved }) {
         notes: fields.notes || null,
       })
 
-      try {
-        const { data: noteData, error: noteError } = await supabase.functions.invoke('generate-checkin-note', {
-          body: {
-            today: saved,
-            recent_days: recent.filter((d) => d.log_date !== todayDateString()),
-          },
-        })
-        if (!noteError && noteData?.note) {
-          await supabase.from('daily_logs').update({ ai_note: noteData.note }).eq('id', saved.id)
+      if (isToday) {
+        try {
+          const { data: noteData, error: noteError } = await supabase.functions.invoke('generate-checkin-note', {
+            body: {
+              today: saved,
+              recent_days: recent.filter((d) => d.log_date !== logDate),
+            },
+          })
+          if (!noteError && noteData?.note) {
+            await supabase.from('daily_logs').update({ ai_note: noteData.note }).eq('id', saved.id)
+          }
+        } catch {
+          // Note generation is best-effort — the check-in itself already saved.
         }
-      } catch {
-        // Note generation is best-effort — the check-in itself already saved.
       }
 
       onSaved?.()
@@ -126,9 +133,15 @@ export default function CheckIn({ onBack, onClose, onSaved }) {
 
   const showForm = mode === 'manual' || extracted
 
+  const title = isToday
+    ? isEditing
+      ? 'EDIT CHECK-IN'
+      : 'MORNING CHECK-IN'
+    : `CHECK-IN — ${new Date(`${logDate}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+
   return (
     <div className="absolute inset-0 bg-bg z-20 flex flex-col overflow-y-auto">
-      <SheetHeader title="MORNING CHECK-IN" onBack={onBack} onClose={onClose} />
+      <SheetHeader title={title} onBack={onBack} onClose={onClose} />
       <div className="px-4 pb-8">
         {!loadingExisting && (
           <>
@@ -236,7 +249,7 @@ export default function CheckIn({ onBack, onClose, onSaved }) {
                   disabled={saving}
                   className="w-full bg-signal disabled:opacity-40 rounded-[9px] py-2.5 text-[#06150F] font-mono text-[12px] font-bold flex items-center justify-center gap-1.5"
                 >
-                  <Check size={14} /> {saving ? 'SAVING…' : 'SAVE CHECK-IN'}
+                  <Check size={14} /> {saving ? 'SAVING…' : isEditing ? 'UPDATE CHECK-IN' : 'SAVE CHECK-IN'}
                 </button>
               </>
             )}

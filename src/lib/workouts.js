@@ -1,8 +1,7 @@
 import { supabase } from './supabaseClient'
 import { todayDateString } from './dailyLog'
 
-export async function fetchTodayWorkouts(userId) {
-  const logDate = todayDateString()
+export async function fetchWorkoutsForDate(userId, logDate) {
   const { data, error } = await supabase
     .from('workouts')
     .select('*')
@@ -12,6 +11,10 @@ export async function fetchTodayWorkouts(userId) {
     .order('logged_at', { ascending: true })
   if (error) throw error
   return data
+}
+
+export function fetchTodayWorkouts(userId) {
+  return fetchWorkoutsForDate(userId, todayDateString())
 }
 
 export async function insertWorkout(userId, dailyLogId, fields) {

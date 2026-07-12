@@ -1,8 +1,7 @@
 import { supabase } from './supabaseClient'
 import { todayDateString } from './dailyLog'
 
-export async function fetchTodayMeals(userId) {
-  const logDate = todayDateString()
+export async function fetchMealsForDate(userId, logDate) {
   const { data, error } = await supabase
     .from('meals')
     .select('*')
@@ -12,6 +11,10 @@ export async function fetchTodayMeals(userId) {
     .order('logged_at', { ascending: true })
   if (error) throw error
   return data
+}
+
+export function fetchTodayMeals(userId) {
+  return fetchMealsForDate(userId, todayDateString())
 }
 
 export async function insertMeal(userId, dailyLogId, fields) {
