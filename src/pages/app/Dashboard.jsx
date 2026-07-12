@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Moon, Droplet, Sparkles, Camera, Dumbbell } from 'lucide-react'
+import { Moon, Droplet, Sparkles, Camera, Dumbbell, Trophy, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchTodayLog, fetchProgressSummary } from '../../lib/dailyLog'
@@ -24,7 +24,7 @@ function computeEta(progress) {
   return etaDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function Dashboard({ onOpenCheckIn, refreshKey }) {
+export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey }) {
   const { user, profile } = useAuth()
   const [log, setLog] = useState(null)
   const [meals, setMeals] = useState([])
@@ -112,6 +112,15 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
           <span className="text-info">{(log?.day_type ?? 'rest').toUpperCase()}</span>
         </div>
       </div>
+
+      <button
+        onClick={onOpenLeaderboard}
+        className="w-full flex items-center gap-2.5 bg-panel border border-hairline rounded-[12px] px-3.5 py-3 mb-3.5"
+      >
+        <Trophy size={15} className="text-caution flex-shrink-0" />
+        <span className="flex-1 text-left text-[12.5px] text-fg">Leaderboard</span>
+        <ChevronRight size={14} className="text-fg-dim flex-shrink-0" />
+      </button>
 
       {progress && (
         <Panel className="mb-3.5">

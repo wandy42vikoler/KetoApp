@@ -6,11 +6,13 @@ import TrendsScreen from './TrendsScreen'
 import CoachScreen from './CoachScreen'
 import LogSheet from './LogSheet'
 import CheckIn from './CheckIn'
+import LeaderboardScreen from './LeaderboardScreen'
 
 export default function AppShell() {
   const [tab, setTab] = useState('home')
   const [sheetOpen, setSheetOpen] = useState(false)
   const [checkinOpen, setCheckinOpen] = useState(false)
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   function handleRefresh() {
@@ -20,7 +22,13 @@ export default function AppShell() {
   return (
     <div className="min-h-screen bg-bg bg-vignette relative">
       <div className="px-4 pt-6 pb-[100px] max-w-md mx-auto">
-        {tab === 'home' && <Dashboard onOpenCheckIn={() => setCheckinOpen(true)} refreshKey={refreshKey} />}
+        {tab === 'home' && (
+          <Dashboard
+            onOpenCheckIn={() => setCheckinOpen(true)}
+            onOpenLeaderboard={() => setLeaderboardOpen(true)}
+            refreshKey={refreshKey}
+          />
+        )}
         {tab === 'trends' && <TrendsScreen />}
         {tab === 'coach' && <CoachScreen />}
         {tab === 'targets' && <TargetsScreen />}
@@ -37,6 +45,7 @@ export default function AppShell() {
         />
       )}
       {checkinOpen && <CheckIn onClose={() => setCheckinOpen(false)} onSaved={handleRefresh} />}
+      {leaderboardOpen && <LeaderboardScreen onClose={() => setLeaderboardOpen(false)} />}
     </div>
   )
 }
