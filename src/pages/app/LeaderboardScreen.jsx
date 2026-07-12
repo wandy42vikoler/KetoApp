@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Trophy, Users } from 'lucide-react'
+import { Trophy, Users, X } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { fetchLeaderboard, setLeaderboardOptIn, setDisplayName } from '../../lib/leaderboard'
 import Panel from '../../components/ui/Panel'
@@ -16,6 +16,7 @@ export default function LeaderboardScreen({ onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [selectedMember, setSelectedMember] = useState(null)
 
   useEffect(() => {
     if (!optedIn) return
@@ -115,9 +116,10 @@ export default function LeaderboardScreen({ onClose }) {
                   {leaderboard.map((row, i) => {
                     const isMe = row.user_id === user.id
                     return (
-                      <div
+                      <button
                         key={row.user_id}
-                        className={`flex items-center gap-3 rounded-[10px] px-3 py-2.5 ${
+                        onClick={() => setSelectedMember(row)}
+                        className={`flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left ${
                           isMe ? 'border border-signal bg-signal-dim/30' : 'bg-panel-raised border border-hairline'
                         }`}
                       >
@@ -135,7 +137,7 @@ export default function LeaderboardScreen({ onClose }) {
                               : `${row.progress_pct ?? 0}% · -${row.total_lost_kg ?? 0}kg`}
                           </div>
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
@@ -153,6 +155,60 @@ export default function LeaderboardScreen({ onClose }) {
             </button>
           </>
         )}
+      </div>
+
+      {selectedMember && <MemberDetailCard member={selectedMember} onClose={() => setSelectedMember(null)} />}
+    </div>
+  )
+}
+
+function MemberDetailCard({ member, onClose }) {
+  const startDate = member.protocol_start_date
+    ? new Date(`${member.protocol_start_date}T00:00:00`).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : '—'
+
+  const rows = [
+    ['START WEIGHT', member.starting_weight_kg != null ? `${member.starting_weight_kg}kg` : '—'],
+    ['TARGET WEIGHT', member.goal_weight_kg != null ? `${member.goal_weight_kg}kg` : '—'],
+    ['CURRENT WEIGHT', member.current_weight_kg != null ? `${member.current_weight_kg}kg` : '—'],
+    ['LOST', member.total_lost_kg != null ? `-${member.total_lost_kg}kg` : '—'],
+    ['PROGRESS', member.progress_pct != null ? `${member.progress_pct}%` : '—'],
+    ['START DATE', startDate],
+  ]
+
+  return (
+    <div className="absolute inset-0 z-30 bg-black/70 flex items-center justify-center px-4" onClick={onClose}>
+      <div
+        className="w-full max-w-sm bg-panel border border-hairline-lit rounded-[16px] p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-start mb-3.5">
+          <div>
+            <div className="text-[16px] font-bold text-fg flex items-center gap-1.5">
+              {member.display_name}
+              {member.achieved && <Trophy size={14} className="text-caution" />}
+            </div>
+            {member.achieved && (
+              <div className="font-mono text-[10px] text-caution tracking-[0.1em] mt-0.5">GOAL ACHIEVED</div>
+            )}
+          </div>
+          <button onClick={onClose} className="bg-transparent border-none text-fg-muted">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          {rows.map(([label, value]) => (
+            <div key={label} className="bg-panel-raised border border-hairline rounded-[9px] px-3 py-2.5">
+              <div className="font-mono text-[9px] text-fg-dim tracking-[0.1em] mb-1">{label}</div>
+              <div className="font-mono text-[15px] text-fg">{value}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
