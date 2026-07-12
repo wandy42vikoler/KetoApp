@@ -4,17 +4,9 @@ const MODEL = 'claude-sonnet-5'
 type TextBlock = { type: 'text'; text: string }
 type ImageBlock = { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
 type ContentBlock = TextBlock | ImageBlock
+type Message = { role: 'user' | 'assistant'; content: string | ContentBlock[] }
 
-// Calls Claude with a system prompt + user content (plain text, or a mix of
-// text/image blocks for vision requests) and returns the text of the
-// response. Throws with a descriptive message on API errors, empty
-// responses, or missing configuration — callers don't need to re-derive
-// any of that.
-export async function callClaude(
-  system: string,
-  userContent: string | ContentBlock[],
-  maxTokens = 1024,
-): Promise<string> {
+async function callClaudeRaw(system: string, messages: Message[], maxTokens: number): Promise<string> {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not configured on this Supabase project')
   }
@@ -30,7 +22,7 @@ export async function callClaude(
       model: MODEL,
       max_tokens: maxTokens,
       system,
-      messages: [{ role: 'user', content: userContent }],
+      messages,
     }),
   })
 
@@ -49,4 +41,17 @@ export async function callClaude(
   }
 
   return rawText
+}
+
+// Single-turn call: system prompt + one user turn (plain text, or a mix of
+// text/image blocks for vision requests). Returns the response text.
+export function callClaude(system: string, userContent: string | ContentBlock[], maxTokens = 1024): Promise<string> {
+  return callClaudeRaw(system, [{ role: 'user', content: userContent }], maxTokens)
+}
+
+// Multi-turn call: system prompt + a full conversation history. Used by
+// coach-chat, where prior turns matter and the system prompt carries a fresh
+// per-request data snapshot rather than being baked into any one turn.
+export function callClaudeMessages(system: string, messages: Message[], maxTokens = 1024): Promise<string> {
+  return callClaudeRaw(system, messages, maxTokens)
 }
