@@ -28,7 +28,12 @@ export default function AppShell() {
       <BottomNav active={tab} onSelect={setTab} onFab={() => setSheetOpen(true)} />
 
       {sheetOpen && (
-        <LogSheet onClose={() => setSheetOpen(false)} onCheckinSaved={handleRefresh} onMealSaved={handleRefresh} />
+        <LogSheet
+          onClose={() => setSheetOpen(false)}
+          onCheckinSaved={handleRefresh}
+          onMealSaved={handleRefresh}
+          onWorkoutSaved={handleRefresh}
+        />
       )}
       {checkinOpen && <CheckIn onClose={() => setCheckinOpen(false)} onSaved={handleRefresh} />}
     </div>

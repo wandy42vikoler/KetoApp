@@ -1,0 +1,285 @@
+import { useState } from 'react'
+import { Camera, Check, Plus, X } from 'lucide-react'
+import { supabase } from '../../lib/supabaseClient'
+import { useAuth } from '../../context/AuthContext'
+import { upsertTodayLog } from '../../lib/dailyLog'
+import { insertWorkout } from '../../lib/workouts'
+import { fileToBase64 } from '../../lib/image'
+import Panel from '../../components/ui/Panel'
+import Eyebrow from '../../components/ui/Eyebrow'
+import SheetHeader from '../../components/ui/SheetHeader'
+import { Field } from '../../components/ui/FormField'
+
+const EMPTY_FIELDS = { activity_name: '', duration_minutes: '', exercises: [] }
+
+export default function WorkoutLog({ onBack, onClose, onSaved }) {
+  const { user } = useAuth()
+  const [mode, setMode] = useState('photo')
+  const [fields, setFields] = useState(EMPTY_FIELDS)
+  const [rawExtraction, setRawExtraction] = useState(null)
+
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analyzeError, setAnalyzeError] = useState(null)
+  const [extracted, setExtracted] = useState(false)
+
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+
+  function updateField(key, value) {
+    setFields((f) => ({ ...f, [key]: value }))
+  }
+
+  function addExercise() {
+    setFields((f) => ({ ...f, exercises: [...f.exercises, { name: '', sets: [{ reps: '', weight_kg: '' }] }] }))
+  }
+
+  function removeExercise(i) {
+    setFields((f) => ({ ...f, exercises: f.exercises.filter((_, idx) => idx !== i) }))
+  }
+
+  function updateExerciseName(i, value) {
+    setFields((f) => ({
+      ...f,
+      exercises: f.exercises.map((ex, idx) => (idx === i ? { ...ex, name: value } : ex)),
+    }))
+  }
+
+  function addSet(i) {
+    setFields((f) => ({
+      ...f,
+      exercises: f.exercises.map((ex, idx) =>
+        idx === i ? { ...ex, sets: [...ex.sets, { reps: '', weight_kg: '' }] } : ex,
+      ),
+    }))
+  }
+
+  function removeSet(i, setIdx) {
+    setFields((f) => ({
+      ...f,
+      exercises: f.exercises.map((ex, idx) =>
+        idx === i ? { ...ex, sets: ex.sets.filter((_, sIdx) => sIdx !== setIdx) } : ex,
+      ),
+    }))
+  }
+
+  function updateSet(i, setIdx, key, value) {
+    setFields((f) => ({
+      ...f,
+      exercises: f.exercises.map((ex, idx) =>
+        idx === i
+          ? { ...ex, sets: ex.sets.map((s, sIdx) => (sIdx === setIdx ? { ...s, [key]: value } : s)) }
+          : ex,
+      ),
+    }))
+  }
+
+  async function handlePhotoSelect(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAnalyzing(true)
+    setAnalyzeError(null)
+    try {
+      const { base64, mediaType } = await fileToBase64(file)
+      const { data, error } = await supabase.functions.invoke('analyze-workout-photo', {
+        body: { image_base64: base64, media_type: mediaType },
+      })
+      if (error) throw error
+      setFields({
+        activity_name: data.activity_name ?? '',
+        duration_minutes: data.duration_minutes ?? '',
+        exercises: data.exercises ?? [],
+      })
+      setRawExtraction(data)
+      setExtracted(true)
+    } catch (err) {
+      setAnalyzeError(err.message || 'Workout analysis failed.')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      // Ensure today's daily_logs row exists before we can link the workout.
+      const dailyLog = await upsertTodayLog(user.id, {})
+
+      const exercises = fields.exercises
+        .filter((ex) => ex.name)
+        .map((ex) => ({
+          name: ex.name,
+          sets: ex.sets
+            .filter((s) => s.reps !== '' || s.weight_kg !== '')
+            .map((s) => ({
+              reps: s.reps === '' ? null : Number(s.reps),
+              weight_kg: s.weight_kg === '' ? null : Number(s.weight_kg),
+            })),
+        }))
+
+      await insertWorkout(user.id, dailyLog.id, {
+        source: mode === 'photo' ? 'photo' : 'manual',
+        activity_name: fields.activity_name || 'Workout',
+        duration_minutes: fields.duration_minutes === '' ? null : Number(fields.duration_minutes),
+        exercises: exercises.length > 0 ? exercises : null,
+        raw_ai_extraction: mode === 'photo' ? rawExtraction : null,
+      })
+
+      // day_type is derived from whether a workouts row exists today — the
+      // ensure-call above ran before this insert, so re-derive now that it does.
+      await upsertTodayLog(user.id, {})
+
+      onSaved?.()
+      onClose()
+    } catch (err) {
+      setSaveError(err.message || 'Could not save workout.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const showForm = mode === 'manual' || extracted
+
+  return (
+    <div className="absolute inset-0 bg-bg z-20 flex flex-col overflow-y-auto">
+      <SheetHeader title="LOG WORKOUT" onBack={onBack} onClose={onClose} />
+      <div className="px-4 pb-8">
+        <div className="flex gap-2 mb-3.5">
+          {['photo', 'manual'].map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`flex-1 py-2 rounded-[8px] font-mono text-[10.5px] tracking-wide border ${
+                mode === m ? 'border-signal bg-signal-dim/40 text-signal' : 'border-hairline text-fg-muted'
+              }`}
+            >
+              {m.toUpperCase()}
+            </button>
+          ))}
+          <button
+            disabled
+            className="flex-1 py-2 rounded-[8px] font-mono text-[10.5px] tracking-wide border border-hairline text-fg-dim opacity-40"
+          >
+            STRAVA
+          </button>
+        </div>
+
+        {mode === 'photo' && !extracted && (
+          <Panel className="mb-3.5">
+            <Eyebrow>Training App Screenshot</Eyebrow>
+            <label className="block h-[150px] rounded-[10px] border border-dashed border-hairline-lit flex items-center justify-center cursor-pointer">
+              <input type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+              {analyzing ? (
+                <div className="font-mono text-[11px] text-fg-dim tracking-[0.1em] animate-pulse">ANALYZING…</div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-fg-dim">
+                  <Camera size={22} />
+                  <span className="font-mono text-[10.5px]">TAP TO UPLOAD</span>
+                </div>
+              )}
+            </label>
+            {analyzeError && <div className="font-mono text-[11px] text-alert mt-3">{analyzeError}</div>}
+          </Panel>
+        )}
+
+        {showForm && (
+          <>
+            <Panel className="mb-3.5">
+              <Eyebrow>{mode === 'photo' ? 'AI-Extracted — Editable' : 'Manual Entry'}</Eyebrow>
+              <div className="flex flex-col gap-3">
+                <Field
+                  label="ACTIVITY NAME"
+                  value={fields.activity_name}
+                  onChange={(v) => updateField('activity_name', v)}
+                  placeholder="e.g. Leg Day, Tennis"
+                />
+                <Field
+                  label="DURATION"
+                  type="number"
+                  unit="min"
+                  value={fields.duration_minutes}
+                  onChange={(v) => updateField('duration_minutes', v)}
+                />
+              </div>
+            </Panel>
+
+            <Panel className="mb-3.5">
+              <Eyebrow>Exercises (Optional)</Eyebrow>
+              <div className="flex flex-col gap-3">
+                {fields.exercises.map((ex, i) => (
+                  <div key={i} className="bg-panel-raised border border-hairline rounded-[10px] p-3">
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className="flex-1">
+                        <Field
+                          label="EXERCISE"
+                          value={ex.name}
+                          onChange={(v) => updateExerciseName(i, v)}
+                          placeholder="e.g. Barbell Squat"
+                        />
+                      </div>
+                      <button
+                        onClick={() => removeExercise(i)}
+                        className="bg-transparent border-none text-fg-dim mt-4"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+
+                    {ex.sets.map((s, sIdx) => (
+                      <div key={sIdx} className="flex items-center gap-2 mb-1.5">
+                        <input
+                          type="number"
+                          value={s.reps}
+                          onChange={(e) => updateSet(i, sIdx, 'reps', e.target.value)}
+                          placeholder="reps"
+                          className="w-full bg-panel border border-hairline rounded-[6px] px-2.5 py-1.5 text-[12px] text-fg outline-none focus:border-signal [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <span className="text-fg-dim font-mono text-[11px]">×</span>
+                        <input
+                          type="number"
+                          value={s.weight_kg}
+                          onChange={(e) => updateSet(i, sIdx, 'weight_kg', e.target.value)}
+                          placeholder="kg"
+                          className="w-full bg-panel border border-hairline rounded-[6px] px-2.5 py-1.5 text-[12px] text-fg outline-none focus:border-signal [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <button
+                          onClick={() => removeSet(i, sIdx)}
+                          className="bg-transparent border-none text-fg-dim flex-shrink-0"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => addSet(i)}
+                      className="font-mono text-[10.5px] text-info bg-transparent border-none mt-1"
+                    >
+                      + ADD SET
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  onClick={addExercise}
+                  className="w-full border border-dashed border-hairline-lit rounded-[9px] py-2.5 text-fg-muted font-mono text-[11.5px] flex items-center justify-center gap-1.5"
+                >
+                  <Plus size={13} /> ADD EXERCISE
+                </button>
+              </div>
+            </Panel>
+
+            {saveError && <div className="font-mono text-[11px] text-alert mb-3">{saveError}</div>}
+
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full bg-signal disabled:opacity-40 rounded-[9px] py-2.5 text-[#06150F] font-mono text-[12px] font-bold flex items-center justify-center gap-1.5"
+            >
+              <Check size={14} /> {saving ? 'SAVING…' : 'CONFIRM & LOG'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -2,14 +2,15 @@ import { useState } from 'react'
 import { Camera, Dumbbell, ClipboardList, ChevronRight } from 'lucide-react'
 import CheckIn from './CheckIn'
 import MealLog from './MealLog'
+import WorkoutLog from './WorkoutLog'
 
 const OPTIONS = [
   { id: 'meal', label: 'Log Meal', sub: 'Photo → editable macros', icon: Camera, disabled: false },
-  { id: 'workout', label: 'Log Workout', sub: 'Photo, manual, or Strava — next pass', icon: Dumbbell, disabled: true },
+  { id: 'workout', label: 'Log Workout', sub: 'Photo or manual — Strava after deploy', icon: Dumbbell, disabled: false },
   { id: 'checkin', label: 'Check-In', sub: 'Scale photo or manual', icon: ClipboardList, disabled: false },
 ]
 
-export default function LogSheet({ onClose, onCheckinSaved, onMealSaved }) {
+export default function LogSheet({ onClose, onCheckinSaved, onMealSaved, onWorkoutSaved }) {
   const [mode, setMode] = useState(null)
 
   if (mode === 'checkin') {
@@ -18,6 +19,10 @@ export default function LogSheet({ onClose, onCheckinSaved, onMealSaved }) {
 
   if (mode === 'meal') {
     return <MealLog onBack={() => setMode(null)} onClose={onClose} onSaved={onMealSaved} />
+  }
+
+  if (mode === 'workout') {
+    return <WorkoutLog onBack={() => setMode(null)} onClose={onClose} onSaved={onWorkoutSaved} />
   }
 
   return (

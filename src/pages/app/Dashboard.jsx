@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Moon, Droplet, Sparkles, Camera } from 'lucide-react'
+import { Moon, Droplet, Sparkles, Camera, Dumbbell } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchTodayLog, fetchProgressSummary } from '../../lib/dailyLog'
 import { fetchTodayMeals, sumMealTotals } from '../../lib/meals'
+import { fetchTodayWorkouts } from '../../lib/workouts'
 import { recommendedWaterLiters } from '../../lib/hydration'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
@@ -26,6 +27,7 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
   const { user, profile } = useAuth()
   const [log, setLog] = useState(null)
   const [meals, setMeals] = useState([])
+  const [workouts, setWorkouts] = useState([])
   const [target, setTarget] = useState(null)
   const [progress, setProgress] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -36,13 +38,15 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [logRow, mealsRows, progressRow] = await Promise.all([
+    const [logRow, mealsRows, workoutsRows, progressRow] = await Promise.all([
       fetchTodayLog(user.id),
       fetchTodayMeals(user.id),
+      fetchTodayWorkouts(user.id),
       fetchProgressSummary(user.id),
     ])
     setLog(logRow)
     setMeals(mealsRows)
+    setWorkouts(workoutsRows)
     setProgress(progressRow)
     setScoreResult(null)
 
@@ -218,27 +222,47 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
           </div>
         )}
 
-        {meals.length > 0 ? (
-          meals.map((m) => (
-            <div key={m.id} className="flex gap-2.5 py-2 border-b border-hairline last:border-b-0">
-              <div className="w-[26px] h-[26px] rounded-[7px] bg-[#1B2422] flex items-center justify-center flex-shrink-0">
-                <Camera size={12} className="text-info" />
+        {workouts.map((w) => (
+          <div key={w.id} className="flex gap-2.5 py-2 border-b border-hairline last:border-b-0">
+            <div className="w-[26px] h-[26px] rounded-[7px] bg-signal-dim flex items-center justify-center flex-shrink-0">
+              <Dumbbell size={13} className="text-signal" />
+            </div>
+            <div className="flex-1">
+              <div className="flex justify-between">
+                <span className="text-[12.5px] text-fg">{w.activity_name}</span>
+                <span className="font-mono text-[10.5px] text-fg-dim">
+                  {new Date(w.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
-              <div className="flex-1">
-                <div className="flex justify-between">
-                  <span className="text-[12.5px] text-fg">{m.description || 'Meal'}</span>
-                  <span className="font-mono text-[10.5px] text-fg-dim">
-                    {new Date(m.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-                <div className="font-mono text-[10.5px] text-fg-dim">
-                  P{m.protein_g ?? 0} · F{m.fat_g ?? 0} · C{m.net_carbs_g ?? 0} · {m.calories ?? 0}kcal
-                </div>
+              <div className="font-mono text-[10.5px] text-fg-dim">
+                {w.duration_minutes ? `${w.duration_minutes}min` : 'duration n/a'}
+                {w.exercises?.length ? ` · ${w.exercises.length} exercise${w.exercises.length > 1 ? 's' : ''}` : ''}
               </div>
             </div>
-          ))
-        ) : (
-          <div className="font-mono text-[11px] text-fg-dim text-center py-3">No meals logged yet today.</div>
+          </div>
+        ))}
+
+        {meals.map((m) => (
+          <div key={m.id} className="flex gap-2.5 py-2 border-b border-hairline last:border-b-0">
+            <div className="w-[26px] h-[26px] rounded-[7px] bg-[#1B2422] flex items-center justify-center flex-shrink-0">
+              <Camera size={12} className="text-info" />
+            </div>
+            <div className="flex-1">
+              <div className="flex justify-between">
+                <span className="text-[12.5px] text-fg">{m.description || 'Meal'}</span>
+                <span className="font-mono text-[10.5px] text-fg-dim">
+                  {new Date(m.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              <div className="font-mono text-[10.5px] text-fg-dim">
+                P{m.protein_g ?? 0} · F{m.fat_g ?? 0} · C{m.net_carbs_g ?? 0} · {m.calories ?? 0}kcal
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {workouts.length === 0 && meals.length === 0 && (
+          <div className="font-mono text-[11px] text-fg-dim text-center py-3">Nothing logged yet today.</div>
         )}
       </Panel>
     </div>
