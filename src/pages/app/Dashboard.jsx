@@ -67,18 +67,23 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
     load()
   }, [load, refreshKey])
 
-  // Informational only — see the "Real Deficit" line below. This never
-  // touches the actual targets a user is trying to hit; the fixed
-  // activity-day bump already baked into `targets` is the only thing that
-  // does that.
+  // Workout calorie estimates run high, so only count a dampened fraction
+  // of them toward the day's actual budget — the whole bump goes to fat
+  // (protein floor and net-carb ceiling stay fixed per TKD structure).
+  const CALORIE_BURN_DAMPENING = 0.65
   const caloriesBurnedToday = workouts.reduce((sum, w) => sum + (w.calories_burned ?? 0), 0)
+  const adjustmentKcal = caloriesBurnedToday * CALORIE_BURN_DAMPENING
+  const effectiveTarget =
+    target && adjustmentKcal > 0
+      ? { ...target, calories: target.calories + adjustmentKcal, fat_g: target.fat_g + adjustmentKcal / 9 }
+      : target
 
   async function handleScoreDay() {
     setScoring(true)
     setScoreError(null)
     try {
       const { data, error } = await supabase.functions.invoke('score-meal-day', {
-        body: { meals, target },
+        body: { meals, target: effectiveTarget },
       })
       if (error) throw error
       setScoreResult(data)
@@ -148,21 +153,19 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
         </Panel>
       )}
 
-      {target ? (
+      {effectiveTarget ? (
         <Panel className="mb-3.5">
           <Eyebrow right={<Stamp status={carbStatus} />}>Macro Burn-Down</Eyebrow>
-          <MacroBar label="CALORIES" value={totals.calories} target={target.calories} unit="" />
-          <MacroBar label="PROTEIN" value={totals.protein} target={target.protein_g} unit="g" />
-          <MacroBar label="FAT" value={totals.fat} target={target.fat_g} unit="g" />
-          <MacroBar label="NET CARBS" value={totals.carbs} target={target.net_carbs_g} unit="g" />
-          {caloriesBurnedToday > 0 && (
+          <MacroBar label="CALORIES" value={totals.calories} target={Math.round(effectiveTarget.calories)} unit="" />
+          <MacroBar label="PROTEIN" value={totals.protein} target={effectiveTarget.protein_g} unit="g" />
+          <MacroBar label="FAT" value={totals.fat} target={Math.round(effectiveTarget.fat_g * 10) / 10} unit="g" />
+          <MacroBar label="NET CARBS" value={totals.carbs} target={effectiveTarget.net_carbs_g} unit="g" />
+          {adjustmentKcal > 0 && (
             <div className="font-mono text-[10px] text-fg-dim mt-2.5 pt-2.5 border-t border-hairline leading-relaxed">
-              REAL DEFICIT (EST.):{' '}
-              <span className="text-fg">
-                {Math.round(target.calories - totals.calories + caloriesBurnedToday)}kcal
-              </span>
+              +{Math.round(adjustmentKcal)}kcal / +{(adjustmentKcal / 9).toFixed(1)}g fat added to target
               <br />
-              target − intake + estimated workout burn. Assessment only, not a target.
+              from {Math.round(caloriesBurnedToday)}kcal estimated workout burn × {CALORIE_BURN_DAMPENING} dampening
+              (estimates run high — protein and net carbs stay fixed).
             </div>
           )}
         </Panel>
