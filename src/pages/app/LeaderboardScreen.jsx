@@ -7,6 +7,14 @@ import Eyebrow from '../../components/ui/Eyebrow'
 import SheetHeader from '../../components/ui/SheetHeader'
 import { Field } from '../../components/ui/FormField'
 
+function formatLostKg(kg) {
+  if (kg == null) return { text: '—', colorClass: 'text-fg-dim' }
+  const rounded = Math.round(kg * 100) / 100
+  if (rounded === 0) return { text: '0.00kg', colorClass: 'text-fg-dim' }
+  if (rounded > 0) return { text: `-${rounded.toFixed(2)}kg`, colorClass: 'text-signal' }
+  return { text: `+${Math.abs(rounded).toFixed(2)}kg`, colorClass: 'text-caution' }
+}
+
 export default function LeaderboardScreen({ onClose }) {
   const { user, profile, refreshProfile } = useAuth()
   const optedIn = Boolean(profile?.on_leaderboard)
@@ -115,6 +123,7 @@ export default function LeaderboardScreen({ onClose }) {
                 <div className="flex flex-col gap-2">
                   {leaderboard.map((row, i) => {
                     const isMe = row.user_id === user.id
+                    const lost = formatLostKg(row.total_lost_kg)
                     return (
                       <button
                         key={row.user_id}
@@ -132,9 +141,8 @@ export default function LeaderboardScreen({ onClose }) {
                             {isMe && <span className="text-fg-dim"> (you)</span>}
                           </div>
                           <div className="font-mono text-[10px] text-fg-dim">
-                            {row.achieved
-                              ? `ACHIEVED · -${row.total_lost_kg}kg`
-                              : `${row.progress_pct ?? 0}% · -${row.total_lost_kg ?? 0}kg`}
+                            {row.achieved ? 'ACHIEVED · ' : `${row.progress_pct ?? 0}% · `}
+                            <span className={lost.colorClass}>{lost.text}</span>
                           </div>
                         </div>
                       </button>
@@ -171,13 +179,15 @@ function MemberDetailCard({ member, onClose }) {
       })
     : '—'
 
+  const lost = formatLostKg(member.total_lost_kg)
+
   const rows = [
-    ['START WEIGHT', member.starting_weight_kg != null ? `${member.starting_weight_kg}kg` : '—'],
-    ['TARGET WEIGHT', member.goal_weight_kg != null ? `${member.goal_weight_kg}kg` : '—'],
-    ['CURRENT WEIGHT', member.current_weight_kg != null ? `${member.current_weight_kg}kg` : '—'],
-    ['LOST', member.total_lost_kg != null ? `-${member.total_lost_kg}kg` : '—'],
-    ['PROGRESS', member.progress_pct != null ? `${member.progress_pct}%` : '—'],
-    ['START DATE', startDate],
+    ['START WEIGHT', member.starting_weight_kg != null ? `${member.starting_weight_kg}kg` : '—', 'text-fg'],
+    ['TARGET WEIGHT', member.goal_weight_kg != null ? `${member.goal_weight_kg}kg` : '—', 'text-fg'],
+    ['CURRENT WEIGHT', member.current_weight_kg != null ? `${member.current_weight_kg}kg` : '—', 'text-fg'],
+    ['LOST', lost.text, lost.colorClass],
+    ['PROGRESS', member.progress_pct != null ? `${member.progress_pct}%` : '—', 'text-fg'],
+    ['START DATE', startDate, 'text-fg'],
   ]
 
   return (
@@ -202,10 +212,10 @@ function MemberDetailCard({ member, onClose }) {
         </div>
 
         <div className="grid grid-cols-2 gap-2.5">
-          {rows.map(([label, value]) => (
+          {rows.map(([label, value, colorClass]) => (
             <div key={label} className="bg-panel-raised border border-hairline rounded-[9px] px-3 py-2.5">
               <div className="font-mono text-[9px] text-fg-dim tracking-[0.1em] mb-1">{label}</div>
-              <div className="font-mono text-[15px] text-fg">{value}</div>
+              <div className={`font-mono text-[15px] ${colorClass}`}>{value}</div>
             </div>
           ))}
         </div>

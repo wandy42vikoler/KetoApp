@@ -67,6 +67,12 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
     load()
   }, [load, refreshKey])
 
+  // Informational only — see the "Real Deficit" line below. This never
+  // touches the actual targets a user is trying to hit; the fixed
+  // activity-day bump already baked into `targets` is the only thing that
+  // does that.
+  const caloriesBurnedToday = workouts.reduce((sum, w) => sum + (w.calories_burned ?? 0), 0)
+
   async function handleScoreDay() {
     setScoring(true)
     setScoreError(null)
@@ -149,6 +155,16 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
           <MacroBar label="PROTEIN" value={totals.protein} target={target.protein_g} unit="g" />
           <MacroBar label="FAT" value={totals.fat} target={target.fat_g} unit="g" />
           <MacroBar label="NET CARBS" value={totals.carbs} target={target.net_carbs_g} unit="g" />
+          {caloriesBurnedToday > 0 && (
+            <div className="font-mono text-[10px] text-fg-dim mt-2.5 pt-2.5 border-t border-hairline leading-relaxed">
+              REAL DEFICIT (EST.):{' '}
+              <span className="text-fg">
+                {Math.round(target.calories - totals.calories + caloriesBurnedToday)}kcal
+              </span>
+              <br />
+              target − intake + estimated workout burn. Assessment only, not a target.
+            </div>
+          )}
         </Panel>
       ) : (
         <Panel className="mb-3.5">

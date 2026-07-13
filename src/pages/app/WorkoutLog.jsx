@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Camera, Check, Plus, X, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
-import { upsertLogForDate, todayDateString } from '../../lib/dailyLog'
+import { upsertLogForDate, todayDateString, fetchProgressSummary } from '../../lib/dailyLog'
 import { insertWorkout, updateWorkout, deleteWorkout } from '../../lib/workouts'
 import { fileToBase64 } from '../../lib/image'
 import Panel from '../../components/ui/Panel'
@@ -10,12 +10,13 @@ import Eyebrow from '../../components/ui/Eyebrow'
 import SheetHeader from '../../components/ui/SheetHeader'
 import { Field } from '../../components/ui/FormField'
 
-const EMPTY_FIELDS = { activity_name: '', duration_minutes: '', exercises: [] }
+const EMPTY_FIELDS = { activity_name: '', duration_minutes: '', calories_burned: '', exercises: [] }
 
 function fieldsFromWorkout(workout) {
   return {
     activity_name: workout.activity_name ?? '',
     duration_minutes: workout.duration_minutes ?? '',
+    calories_burned: workout.calories_burned ?? '',
     exercises: (workout.exercises ?? []).map((ex) => ({
       name: ex.name ?? '',
       sets: (ex.sets ?? []).map((s) => ({ reps: s.reps ?? '', weight_kg: s.weight_kg ?? '' })),
@@ -24,7 +25,7 @@ function fieldsFromWorkout(workout) {
 }
 
 export default function WorkoutLog({ date, workout, onBack, onClose, onSaved }) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const logDate = date ?? todayDateString()
   const isEditing = Boolean(workout?.id)
 
@@ -96,13 +97,17 @@ export default function WorkoutLog({ date, workout, onBack, onClose, onSaved }) 
     setAnalyzeError(null)
     try {
       const { base64, mediaType } = await fileToBase64(file)
+      const progress = await fetchProgressSummary(user.id).catch(() => null)
+      const weight_kg = progress?.current_weight_kg ?? profile?.starting_weight_kg ?? undefined
+
       const { data, error } = await supabase.functions.invoke('analyze-workout-photo', {
-        body: { image_base64: base64, media_type: mediaType },
+        body: { image_base64: base64, media_type: mediaType, weight_kg },
       })
       if (error) throw error
       setFields({
         activity_name: data.activity_name ?? '',
         duration_minutes: data.duration_minutes ?? '',
+        calories_burned: data.calories_burned ?? '',
         exercises: data.exercises ?? [],
       })
       setRawExtraction(data)
@@ -136,6 +141,7 @@ export default function WorkoutLog({ date, workout, onBack, onClose, onSaved }) 
       const activityFields = {
         activity_name: fields.activity_name || 'Workout',
         duration_minutes: fields.duration_minutes === '' ? null : Number(fields.duration_minutes),
+        calories_burned: fields.calories_burned === '' ? null : Number(fields.calories_burned),
         exercises: exercises.length > 0 ? exercises : null,
       }
 
@@ -245,6 +251,13 @@ export default function WorkoutLog({ date, workout, onBack, onClose, onSaved }) 
                   unit="min"
                   value={fields.duration_minutes}
                   onChange={(v) => updateField('duration_minutes', v)}
+                />
+                <Field
+                  label="CALORIES BURNED"
+                  type="number"
+                  unit="kcal"
+                  value={fields.calories_burned}
+                  onChange={(v) => updateField('calories_burned', v)}
                 />
               </div>
             </Panel>
