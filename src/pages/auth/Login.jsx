@@ -27,7 +27,7 @@ export default function Login() {
     <div className="min-h-screen bg-bg bg-vignette flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="font-mono text-[10px] text-fg-dim tracking-[0.18em] mb-1">PROTOCOL // TKD-01</div>
+          <div className="font-mono text-[10px] text-fg-dim tracking-[0.18em] mb-1">SHREDDER PLANNER</div>
           <div className="text-xl font-bold text-fg">Sign In</div>
         </div>
         <Panel>

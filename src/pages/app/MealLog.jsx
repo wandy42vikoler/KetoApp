@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Camera, Check, Trash2, Star, X } from 'lucide-react'
+import { Camera, Check, Trash2, Star, X, Sparkles } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
 import { upsertLogForDate, todayDateString } from '../../lib/dailyLog'
@@ -15,7 +15,7 @@ const EMPTY_FIELDS = {
   description: '',
   protein_g: '',
   fat_g: '',
-  net_carbs_g: '',
+  carbs_g: '',
   calories: '',
 }
 
@@ -24,7 +24,7 @@ function fieldsFromMeal(meal) {
     description: meal.description ?? '',
     protein_g: meal.protein_g ?? '',
     fat_g: meal.fat_g ?? '',
-    net_carbs_g: meal.net_carbs_g ?? '',
+    carbs_g: meal.carbs_g ?? '',
     calories: meal.calories ?? '',
   }
 }
@@ -35,6 +35,8 @@ export default function MealLog({ date, meal, onBack, onClose, onSaved }) {
   const isEditing = Boolean(meal?.id)
 
   const [mode, setMode] = useState('photo')
+  const [photoFile, setPhotoFile] = useState(null)
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState(null)
   const [fields, setFields] = useState(() => (isEditing ? fieldsFromMeal(meal) : EMPTY_FIELDS))
   const [confidence, setConfidence] = useState(meal?.confidence ?? 'manual')
   const [notes, setNotes] = useState(meal?.ai_notes ?? null)
@@ -83,7 +85,7 @@ export default function MealLog({ date, meal, onBack, onClose, onSaved }) {
       description: fav.description ?? '',
       protein_g: fav.protein_g ?? '',
       fat_g: fav.fat_g ?? '',
-      net_carbs_g: fav.net_carbs_g ?? '',
+      carbs_g: fav.carbs_g ?? '',
       calories: fav.calories ?? '',
     })
     setConfidence('manual')
@@ -102,13 +104,33 @@ export default function MealLog({ date, meal, onBack, onClose, onSaved }) {
     }
   }
 
-  async function handlePhotoSelect(e) {
+  // Picking a photo just previews it — analysis is a separate, explicit
+  // step (ANALYZE button below) so the description can be added before or
+  // after choosing the image, in whatever order is convenient.
+  function handlePhotoSelect(e) {
     const file = e.target.files?.[0]
     if (!file) return
+    setPhotoFile(file)
+    setPhotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return URL.createObjectURL(file)
+    })
+    setAnalyzeError(null)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleAnalyze() {
+    if (!photoFile) return
     setAnalyzing(true)
     setAnalyzeError(null)
     try {
-      const { base64, mediaType } = await fileToBase64(file)
+      const { base64, mediaType } = await fileToBase64(photoFile)
       const { data, error } = await supabase.functions.invoke('analyze-meal', {
         body: { image_base64: base64, media_type: mediaType, user_context: photoContext || undefined },
       })
@@ -117,7 +139,7 @@ export default function MealLog({ date, meal, onBack, onClose, onSaved }) {
         description: data.description ?? '',
         protein_g: data.protein_g ?? '',
         fat_g: data.fat_g ?? '',
-        net_carbs_g: data.net_carbs_g ?? '',
+        carbs_g: data.carbs_g ?? '',
         calories: data.calories ?? '',
       })
       setConfidence(data.confidence ?? 'medium')
@@ -138,7 +160,7 @@ export default function MealLog({ date, meal, onBack, onClose, onSaved }) {
         description: fields.description || null,
         protein_g: fields.protein_g === '' ? null : Number(fields.protein_g),
         fat_g: fields.fat_g === '' ? null : Number(fields.fat_g),
-        net_carbs_g: fields.net_carbs_g === '' ? null : Number(fields.net_carbs_g),
+        carbs_g: fields.carbs_g === '' ? null : Number(fields.carbs_g),
         calories: fields.calories === '' ? null : Number(fields.calories),
       }
 
@@ -206,10 +228,10 @@ export default function MealLog({ date, meal, onBack, onClose, onSaved }) {
         {!isEditing && mode === 'photo' && !extracted && (
           <Panel className="mb-3.5">
             <Eyebrow>Meal Photo</Eyebrow>
-            <label className="block h-[150px] rounded-[10px] border border-dashed border-hairline-lit flex items-center justify-center cursor-pointer">
+            <label className="block h-[150px] rounded-[10px] border border-dashed border-hairline-lit flex items-center justify-center cursor-pointer overflow-hidden">
               <input type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
-              {analyzing ? (
-                <div className="font-mono text-[11px] text-fg-dim tracking-[0.1em] animate-pulse">ANALYZING…</div>
+              {photoPreviewUrl ? (
+                <img src={photoPreviewUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="flex flex-col items-center gap-2 text-fg-dim">
                   <Camera size={22} />
@@ -217,16 +239,42 @@ export default function MealLog({ date, meal, onBack, onClose, onSaved }) {
                 </div>
               )}
             </label>
+
+            {photoFile && (
+              <div className="flex justify-between items-center mt-2">
+                <span className="font-mono text-[10px] text-fg-dim truncate">{photoFile.name}</span>
+                <button
+                  onClick={() => {
+                    if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
+                    setPhotoFile(null)
+                    setPhotoPreviewUrl(null)
+                  }}
+                  className="font-mono text-[10px] text-fg-dim bg-transparent border-none flex-shrink-0"
+                >
+                  REMOVE
+                </button>
+              </div>
+            )}
+
             {analyzeError && <div className="font-mono text-[11px] text-alert mt-3">{analyzeError}</div>}
+
             <div className="mt-3">
               <Field
-                label="DESCRIBE IT (OPTIONAL)"
+                label="DESCRIBE IT (OPTIONAL — BEFORE OR AFTER THE PHOTO)"
                 value={photoContext}
                 onChange={setPhotoContext}
                 placeholder="e.g. two grilled chicken breasts, roughly 200g each"
                 disabled={analyzing}
               />
             </div>
+
+            <button
+              onClick={handleAnalyze}
+              disabled={!photoFile || analyzing}
+              className="w-full mt-3 bg-signal disabled:opacity-40 rounded-[9px] py-2.5 text-[#06150F] font-mono text-[12px] font-bold flex items-center justify-center gap-1.5"
+            >
+              <Sparkles size={13} /> {analyzing ? 'ANALYZING…' : 'ANALYZE PHOTO'}
+            </button>
           </Panel>
         )}
 
@@ -251,7 +299,7 @@ export default function MealLog({ date, meal, onBack, onClose, onSaved }) {
                     <button onClick={() => selectFavorite(fav)} className="flex-1 min-w-0 text-left bg-transparent border-none">
                       <div className="text-[12.5px] text-fg truncate">{fav.description}</div>
                       <div className="font-mono text-[10px] text-fg-dim">
-                        P{fav.protein_g ?? 0} · F{fav.fat_g ?? 0} · C{fav.net_carbs_g ?? 0} · {fav.calories ?? 0}kcal
+                        P{fav.protein_g ?? 0} · F{fav.fat_g ?? 0} · C{fav.carbs_g ?? 0} · {fav.calories ?? 0}kcal
                       </div>
                     </button>
                     {confirmDeleteFavId === fav.id ? (
@@ -316,11 +364,11 @@ export default function MealLog({ date, meal, onBack, onClose, onSaved }) {
                   onChange={(v) => updateField('fat_g', v)}
                 />
                 <Field
-                  label="NET CARBS"
+                  label="CARBS"
                   type="number"
                   unit="g"
-                  value={fields.net_carbs_g}
-                  onChange={(v) => updateField('net_carbs_g', v)}
+                  value={fields.carbs_g}
+                  onChange={(v) => updateField('carbs_g', v)}
                 />
                 <Field
                   label="CALORIES"

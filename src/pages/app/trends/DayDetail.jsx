@@ -98,7 +98,7 @@ export default function DayDetail({ date, onEditCheckIn, onAddMeal, onEditMeal, 
           <div className="flex-1 min-w-0">
             <div className="text-[12px] text-fg truncate">{m.description || 'Meal'}</div>
             <div className="font-mono text-[10px] text-fg-dim">
-              P{m.protein_g ?? 0} · F{m.fat_g ?? 0} · C{m.net_carbs_g ?? 0} · {m.calories ?? 0}kcal
+              P{m.protein_g ?? 0} · F{m.fat_g ?? 0} · C{m.carbs_g ?? 0} · {m.calories ?? 0}kcal
             </div>
           </div>
           <Pencil size={11} className="text-fg-dim flex-shrink-0" />

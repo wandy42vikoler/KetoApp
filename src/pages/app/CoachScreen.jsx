@@ -1,15 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Send } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
 import { buildCoachContext } from '../../lib/coachContext'
+import { fetchCoachMessages, insertCoachMessage } from '../../lib/coachMessages'
 
 export default function CoachScreen() {
   const { user, profile } = useAuth()
   const [messages, setMessages] = useState([])
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let active = true
+    fetchCoachMessages(user.id)
+      .then((rows) => {
+        if (active) setMessages(rows.map((r) => ({ role: r.role, text: r.text })))
+      })
+      .catch(() => {})
+      .finally(() => active && setHistoryLoaded(true))
+    return () => {
+      active = false
+    }
+  }, [user.id])
 
   async function handleSend(e) {
     e.preventDefault()
@@ -21,6 +36,7 @@ export default function CoachScreen() {
     setInput('')
     setSending(true)
     setError(null)
+    insertCoachMessage(user.id, 'user', text).catch(() => {})
 
     try {
       const context = await buildCoachContext(user.id, profile)
@@ -29,6 +45,7 @@ export default function CoachScreen() {
       })
       if (invokeError) throw invokeError
       setMessages((m) => [...m, { role: 'assistant', text: data.reply }])
+      insertCoachMessage(user.id, 'assistant', data.reply).catch(() => {})
     } catch (err) {
       setError(err.message || 'Coach is unavailable right now.')
     } finally {
@@ -42,7 +59,7 @@ export default function CoachScreen() {
       <div className="text-xl font-bold text-fg mb-4">Coach</div>
 
       <div className="mb-4">
-        {messages.length === 0 && (
+        {historyLoaded && messages.length === 0 && (
           <div className="font-mono text-[11px] text-fg-dim text-center py-10 leading-relaxed">
             Ask about your trends, targets, or the science behind the protocol.
             <br />

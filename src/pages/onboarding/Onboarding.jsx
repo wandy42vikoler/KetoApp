@@ -143,7 +143,7 @@ export default function Onboarding() {
     <div className="min-h-screen bg-bg bg-vignette flex items-start justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
-          <div className="font-mono text-[10px] text-fg-dim tracking-[0.18em] mb-1">PROTOCOL SETUP</div>
+          <div className="font-mono text-[10px] text-fg-dim tracking-[0.18em] mb-1">SHREDDER PLANNER</div>
           <div className="text-xl font-bold text-fg">Onboarding</div>
         </div>
 

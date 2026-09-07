@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { fetchLogsInRange, fetchProgressSummary, todayDateString } from '../../lib/dailyLog'
+import { fetchWeeklyCheckins, getProgressPhotoUrl } from '../../lib/weeklyCheckins'
 import Calendar from './trends/Calendar'
 import DayDetail from './trends/DayDetail'
 import WeightChart from './trends/WeightChart'
@@ -26,6 +27,7 @@ export default function TrendsScreen() {
   const [monthLogs, setMonthLogs] = useState([])
   const [chartLogs, setChartLogs] = useState([])
   const [progress, setProgress] = useState(null)
+  const [weeklyCheckins, setWeeklyCheckins] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -47,10 +49,21 @@ export default function TrendsScreen() {
     setProgress(progressRow)
   }, [user.id, profile?.protocol_start_date, today])
 
+  const loadWeeklyCheckins = useCallback(async () => {
+    const rows = await fetchWeeklyCheckins(user.id)
+    const withPhotos = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        photoUrl: row.photo_path ? await getProgressPhotoUrl(row.photo_path).catch(() => null) : null,
+      })),
+    )
+    setWeeklyCheckins(withPhotos)
+  }, [user.id])
+
   useEffect(() => {
     setLoading(true)
-    Promise.all([loadMonth(), loadChartData()]).finally(() => setLoading(false))
-  }, [loadMonth, loadChartData, refreshKey])
+    Promise.all([loadMonth(), loadChartData(), loadWeeklyCheckins()]).finally(() => setLoading(false))
+  }, [loadMonth, loadChartData, loadWeeklyCheckins, refreshKey])
 
   const logsByDate = Object.fromEntries(
     monthLogs.map((l) => [l.log_date, { hasLog: true, mealScore: l.meal_score }]),
@@ -64,6 +77,36 @@ export default function TrendsScreen() {
     <div>
       <div className="font-mono text-[10px] text-fg-dim tracking-[0.18em] mb-1">TELEMETRY</div>
       <div className="text-xl font-bold text-fg mb-4">Trends</div>
+
+      {weeklyCheckins.length > 0 && (
+        <div className="mb-3.5">
+          <div className="font-mono text-[10.5px] text-fg-dim tracking-[0.16em] uppercase mb-2.5">Weekly Check-Ins</div>
+          <div className="flex flex-col gap-2.5">
+            {weeklyCheckins.map((wc) => (
+              <div key={wc.id} className="flex gap-3 bg-panel border border-hairline rounded-[12px] p-3">
+                {wc.photoUrl ? (
+                  <img src={wc.photoUrl} alt="" className="w-[54px] h-[54px] rounded-[8px] object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-[54px] h-[54px] rounded-[8px] bg-panel-raised flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-mono text-[10px] text-fg-dim mb-1">
+                    WEEK OF{' '}
+                    {new Date(`${wc.week_start_date}T00:00:00`).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </div>
+                  {wc.summary && <div className="text-[12px] text-fg leading-relaxed line-clamp-2">{wc.summary}</div>}
+                  {wc.ai_feedback && (
+                    <div className="text-[11px] text-fg-muted leading-relaxed mt-1 line-clamp-2">{wc.ai_feedback}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-panel border border-hairline rounded-[14px] p-4 mb-3.5">
         <Calendar

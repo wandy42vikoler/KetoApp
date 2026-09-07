@@ -6,7 +6,7 @@ create table if not exists favorite_meals (
   description text not null,
   protein_g numeric,
   fat_g numeric,
-  net_carbs_g numeric,
+  carbs_g numeric,
   calories numeric,
   created_at timestamptz default now()
 );

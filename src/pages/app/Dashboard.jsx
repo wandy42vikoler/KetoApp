@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Moon, Droplet, Sparkles, Camera, Dumbbell, Trophy, ChevronRight } from 'lucide-react'
+import { Moon, Droplet, Footprints, Sparkles, Camera, Dumbbell, Pill } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
-import { fetchTodayLog, fetchProgressSummary } from '../../lib/dailyLog'
+import { fetchTodayLog, fetchProgressSummary, todayDateString } from '../../lib/dailyLog'
 import { fetchTodayMeals, sumMealTotals } from '../../lib/meals'
-import { fetchTodayWorkouts } from '../../lib/workouts'
+import { fetchTodayWorkouts, fetchWorkoutsInRange } from '../../lib/workouts'
 import { recommendedWaterLiters } from '../../lib/hydration'
-import { protocolDayNumber } from '../../lib/protocolDay'
+import { protocolDayNumber, daysUntil } from '../../lib/protocolDay'
+import {
+  WEEKDAY_LABELS,
+  fetchTrainingPlan,
+  groupByWeekday,
+  isoWeekday,
+  currentWeekRange,
+} from '../../lib/trainingPlan'
+import { toggleSupplementToday } from '../../lib/supplementLog'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
 import Stamp from '../../components/ui/Stamp'
 import MacroBar from '../../components/ui/MacroBar'
 import Stat from '../../components/ui/Stat'
 import ProtocolDial from '../../components/ui/ProtocolDial'
+import WorkoutLog from './WorkoutLog'
 
 function computeEta(progress) {
   if (!progress?.current_weight_kg || progress.rate_kg_per_week == null) return null
@@ -24,31 +33,42 @@ function computeEta(progress) {
   return etaDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey }) {
+export default function Dashboard({ onOpenCheckIn, refreshKey }) {
   const { user, profile } = useAuth()
   const [log, setLog] = useState(null)
   const [meals, setMeals] = useState([])
   const [workouts, setWorkouts] = useState([])
   const [target, setTarget] = useState(null)
   const [progress, setProgress] = useState(null)
+  const [planDays, setPlanDays] = useState([])
+  const [weekWorkouts, setWeekWorkouts] = useState([])
   const [loading, setLoading] = useState(true)
 
   const [scoring, setScoring] = useState(false)
   const [scoreError, setScoreError] = useState(null)
   const [scoreResult, setScoreResult] = useState(null)
 
+  const [plannedLog, setPlannedLog] = useState(null) // { label } — opens WorkoutLog for today
+
+  const today = todayDateString()
+  const { start: weekStart, end: weekEnd } = currentWeekRange()
+
   const load = useCallback(async () => {
     setLoading(true)
-    const [logRow, mealsRows, workoutsRows, progressRow] = await Promise.all([
+    const [logRow, mealsRows, workoutsRows, progressRow, plan, weekWorkoutRows] = await Promise.all([
       fetchTodayLog(user.id),
       fetchTodayMeals(user.id),
       fetchTodayWorkouts(user.id),
       fetchProgressSummary(user.id),
+      fetchTrainingPlan(user.id),
+      fetchWorkoutsInRange(user.id, weekStart, weekEnd),
     ])
     setLog(logRow)
     setMeals(mealsRows)
     setWorkouts(workoutsRows)
     setProgress(progressRow)
+    setPlanDays(plan)
+    setWeekWorkouts(weekWorkoutRows)
     setScoreResult(null)
 
     const dayType = logRow?.day_type ?? 'rest'
@@ -61,6 +81,7 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
     setTarget(targetRow)
 
     setLoading(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id])
 
   useEffect(() => {
@@ -69,7 +90,7 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
 
   // Workout calorie estimates run high, so only count a dampened fraction
   // of them toward the day's actual budget — the whole bump goes to fat
-  // (protein floor and net-carb ceiling stay fixed per TKD structure).
+  // (protein and carb targets stay fixed).
   const CALORIE_BURN_DAMPENING = 0.65
   const caloriesBurnedToday = workouts.reduce((sum, w) => sum + (w.calories_burned ?? 0), 0)
   const adjustmentKcal = caloriesBurnedToday * CALORIE_BURN_DAMPENING
@@ -97,41 +118,62 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
     }
   }
 
+  async function handleToggleSupplement(id, checked) {
+    setLog((l) => ({ ...l, supplements: { ...(l?.supplements ?? {}), [id]: checked } }))
+    try {
+      await toggleSupplementToday(user.id, id, checked)
+    } catch {
+      // best-effort — a failed toggle just means it reverts on next load
+    }
+  }
+
   if (loading) {
     return <div className="font-mono text-[11px] text-fg-dim text-center py-10">LOADING…</div>
   }
 
   const totals = sumMealTotals(meals)
-  const carbStatus = target && totals.carbs > target.net_carbs_g ? 'BREACH' : 'COMPLIANT'
+  const carbStatus = target && totals.carbs > target.carbs_g ? 'OVER' : 'ON TARGET'
   const eta = computeEta(progress)
   const waterTarget = recommendedWaterLiters(
     progress?.current_weight_kg ?? profile?.starting_weight_kg,
     log?.day_type ?? 'rest',
   )
+  const remainingDays = daysUntil(profile?.target_event_date)
+  const eventLabel = profile?.target_event_name
+
+  const grouped = groupByWeekday(planDays)
+  const todayWeekday = isoWeekday(new Date())
+  const todayPlan = grouped[todayWeekday] ?? []
+
+  const loggedWeekdaySet = new Set(weekWorkouts.map((w) => isoWeekday(new Date(w.logged_at))))
+
+  const supplements = profile?.supplement_stack ?? []
+  const todaySupplements = log?.supplements ?? {}
 
   return (
     <div>
       <div className="flex justify-between items-baseline mb-4.5">
         <div>
-          <div className="font-mono text-[10px] text-fg-dim tracking-[0.18em]">PROTOCOL // TKD-01</div>
+          <div className="font-mono text-[10px] text-fg-dim tracking-[0.18em]">SHREDDER PLANNER</div>
           <div className="text-xl font-bold text-fg">Welcome back</div>
         </div>
         <div className="font-mono text-[10.5px] text-fg-dim text-right">
           {protocolDayNumber(profile?.protocol_start_date) != null && (
-            <>DAY {protocolDayNumber(profile?.protocol_start_date)}<br /></>
+            <>
+              DAY {protocolDayNumber(profile?.protocol_start_date)}
+              <br />
+            </>
+          )}
+          {remainingDays != null && (
+            <>
+              <span className="text-signal">{remainingDays >= 0 ? `${remainingDays}D` : 'PASSED'}</span>
+              {eventLabel ? ` TO ${eventLabel.toUpperCase()}` : ''}
+              <br />
+            </>
           )}
           <span className="text-info">{(log?.day_type ?? 'rest').toUpperCase()}</span>
         </div>
       </div>
-
-      <button
-        onClick={onOpenLeaderboard}
-        className="w-full flex items-center gap-2.5 bg-panel border border-hairline rounded-[12px] px-3.5 py-3 mb-3.5"
-      >
-        <Trophy size={15} className="text-caution flex-shrink-0" />
-        <span className="flex-1 text-left text-[12.5px] text-fg">Leaderboard</span>
-        <ChevronRight size={14} className="text-fg-dim flex-shrink-0" />
-      </button>
 
       {progress && (
         <Panel className="mb-3.5">
@@ -159,20 +201,20 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
           <MacroBar label="CALORIES" value={totals.calories} target={Math.round(effectiveTarget.calories)} unit="" />
           <MacroBar label="PROTEIN" value={totals.protein} target={effectiveTarget.protein_g} unit="g" />
           <MacroBar label="FAT" value={totals.fat} target={Math.round(effectiveTarget.fat_g * 10) / 10} unit="g" />
-          <MacroBar label="NET CARBS" value={totals.carbs} target={effectiveTarget.net_carbs_g} unit="g" />
+          <MacroBar label="CARBS" value={totals.carbs} target={effectiveTarget.carbs_g} unit="g" />
           {adjustmentKcal > 0 && (
             <div className="font-mono text-[10px] text-fg-dim mt-2.5 pt-2.5 border-t border-hairline leading-relaxed">
               +{Math.round(adjustmentKcal)}kcal / +{(adjustmentKcal / 9).toFixed(1)}g fat added to target
               <br />
               from {Math.round(caloriesBurnedToday)}kcal estimated workout burn × {CALORIE_BURN_DAMPENING} dampening
-              (estimates run high — protein and net carbs stay fixed).
+              (estimates run high — protein and carbs stay fixed).
             </div>
           )}
         </Panel>
       ) : (
         <Panel className="mb-3.5">
           <div className="font-mono text-[11px] text-fg-dim text-center py-4">
-            No targets set yet — visit the Targets tab.
+            No targets set yet — visit the Plan tab.
           </div>
         </Panel>
       )}
@@ -213,7 +255,81 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
         </Panel>
       )}
 
-      <div className="grid grid-cols-2 gap-2.5 mb-3.5">
+      {(todayPlan.length > 0 || planDays.length > 0) && (
+        <Panel className="mb-3.5">
+          <Eyebrow>This Week</Eyebrow>
+          <div className="grid grid-cols-7 gap-1.5 mb-3">
+            {[1, 2, 3, 4, 5, 6, 7].map((wd) => {
+              const done = loggedWeekdaySet.has(wd)
+              const isToday = wd === todayWeekday
+              return (
+                <div
+                  key={wd}
+                  className={`flex flex-col items-center gap-1.5 rounded-[8px] py-2 ${
+                    isToday ? 'bg-signal-dim/30 border border-signal/40' : ''
+                  }`}
+                >
+                  <div className="font-mono text-[9px] text-fg-dim">{WEEKDAY_LABELS[wd - 1][0]}</div>
+                  <div className={`w-2 h-2 rounded-full ${done ? 'bg-signal' : 'bg-hairline-lit'}`} />
+                </div>
+              )
+            })}
+          </div>
+          {todayPlan.length > 0 && (
+            <div className="flex flex-col gap-2 pt-1 border-t border-hairline">
+              <div className="font-mono text-[10px] text-fg-dim tracking-[0.1em] pt-2.5">TODAY'S PLAN — TAP TO LOG</div>
+              {todayPlan.map((row) => (
+                <button
+                  key={row.id}
+                  onClick={() => setPlannedLog({ label: row.label })}
+                  className="flex items-center gap-2.5 bg-panel-raised border border-hairline rounded-[10px] px-3 py-2.5 text-left"
+                >
+                  <div className="w-[26px] h-[26px] rounded-[7px] bg-signal-dim flex items-center justify-center flex-shrink-0">
+                    <Dumbbell size={13} className="text-signal" />
+                  </div>
+                  <span className="flex-1 text-[12.5px] text-fg">{row.label}</span>
+                  {!row.required && (
+                    <span className="font-mono text-[9px] text-fg-dim border border-hairline rounded-[4px] px-1.5 py-0.5">
+                      OPT
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </Panel>
+      )}
+
+      {supplements.length > 0 && (
+        <Panel className="mb-3.5">
+          <Eyebrow>
+            <Pill size={11} className="inline mr-1.5 -translate-y-px" /> Supplements
+          </Eyebrow>
+          <div className="flex flex-col gap-2">
+            {supplements.map((item) => {
+              const checked = Boolean(todaySupplements[item.id])
+              return (
+                <label
+                  key={item.id}
+                  className="flex items-center gap-2.5 bg-panel-raised border border-hairline rounded-[9px] px-3 py-2"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => handleToggleSupplement(item.id, e.target.checked)}
+                  />
+                  <span className={`flex-1 text-[12.5px] ${checked ? 'text-fg-dim line-through' : 'text-fg'}`}>
+                    {item.name}
+                  </span>
+                  {item.dose && <span className="font-mono text-[10px] text-fg-dim">{item.dose}</span>}
+                </label>
+              )
+            })}
+          </div>
+        </Panel>
+      )}
+
+      <div className="grid grid-cols-3 gap-2.5 mb-3.5">
         <Panel className="p-3.5">
           <div className="flex items-center gap-1.5 text-fg-muted font-mono text-[10.5px]">
             <Moon size={12} /> SLEEP
@@ -225,7 +341,18 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
         </Panel>
         <Panel className="p-3.5">
           <div className="flex items-center gap-1.5 text-fg-muted font-mono text-[10.5px]">
-            <Droplet size={12} /> WATER TARGET
+            <Footprints size={12} /> STEPS
+          </div>
+          <div className="font-mono text-[22px] text-fg mt-1">
+            {log?.steps ?? '—'}
+            {profile?.daily_steps_goal && (
+              <span className="text-xs text-fg-dim"> /{Math.round(profile.daily_steps_goal / 1000)}k</span>
+            )}
+          </div>
+        </Panel>
+        <Panel className="p-3.5">
+          <div className="flex items-center gap-1.5 text-fg-muted font-mono text-[10.5px]">
+            <Droplet size={12} /> WATER
           </div>
           <div className="font-mono text-[22px] text-fg mt-1">
             {waterTarget ?? '—'}
@@ -275,6 +402,7 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
                 {w.duration_minutes ? `${w.duration_minutes}min` : 'duration n/a'}
                 {w.exercises?.length ? ` · ${w.exercises.length} exercise${w.exercises.length > 1 ? 's' : ''}` : ''}
               </div>
+              {w.ai_feedback && <div className="text-[11px] text-fg-muted mt-1 leading-relaxed">{w.ai_feedback}</div>}
             </div>
           </div>
         ))}
@@ -292,7 +420,7 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
                 </span>
               </div>
               <div className="font-mono text-[10.5px] text-fg-dim">
-                P{m.protein_g ?? 0} · F{m.fat_g ?? 0} · C{m.net_carbs_g ?? 0} · {m.calories ?? 0}kcal
+                P{m.protein_g ?? 0} · F{m.fat_g ?? 0} · C{m.carbs_g ?? 0} · {m.calories ?? 0}kcal
               </div>
             </div>
           </div>
@@ -302,6 +430,16 @@ export default function Dashboard({ onOpenCheckIn, onOpenLeaderboard, refreshKey
           <div className="font-mono text-[11px] text-fg-dim text-center py-3">Nothing logged yet today.</div>
         )}
       </Panel>
+
+      {plannedLog && (
+        <WorkoutLog
+          date={today}
+          plannedLabel={plannedLog.label}
+          onBack={() => setPlannedLog(null)}
+          onClose={() => setPlannedLog(null)}
+          onSaved={load}
+        />
+      )}
     </div>
   )
 }

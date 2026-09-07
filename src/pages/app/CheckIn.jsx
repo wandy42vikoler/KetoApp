@@ -13,6 +13,7 @@ const EMPTY_FIELDS = {
   weight_kg: '',
   body_fat_pct: '',
   muscle_mass_kg: '',
+  steps: '',
   sleep_quality: 6,
   energy_level: 6,
   soreness_notes: '',
@@ -47,6 +48,7 @@ export default function CheckIn({ date, onBack, onClose, onSaved }) {
           weight_kg: existing.weight_kg ?? '',
           body_fat_pct: existing.body_fat_pct ?? '',
           muscle_mass_kg: existing.muscle_mass_kg ?? '',
+          steps: existing.steps ?? '',
           sleep_quality: existing.sleep_quality ?? 6,
           energy_level: existing.energy_level ?? 6,
           soreness_notes: existing.soreness_notes ?? '',
@@ -100,6 +102,7 @@ export default function CheckIn({ date, onBack, onClose, onSaved }) {
         weight_kg: fields.weight_kg === '' ? null : Number(fields.weight_kg),
         body_fat_pct: fields.body_fat_pct === '' ? null : Number(fields.body_fat_pct),
         muscle_mass_kg: fields.muscle_mass_kg === '' ? null : Number(fields.muscle_mass_kg),
+        steps: fields.steps === '' ? null : Number(fields.steps),
         sleep_quality: Number(fields.sleep_quality),
         energy_level: Number(fields.energy_level),
         soreness_notes: fields.soreness_notes || null,
@@ -210,6 +213,12 @@ export default function CheckIn({ date, onBack, onClose, onSaved }) {
                       unit="kg"
                       value={fields.muscle_mass_kg}
                       onChange={(v) => updateField('muscle_mass_kg', v)}
+                    />
+                    <Field
+                      label="STEPS"
+                      type="number"
+                      value={fields.steps}
+                      onChange={(v) => updateField('steps', v)}
                     />
                   </div>
                 </Panel>

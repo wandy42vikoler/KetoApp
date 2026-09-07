@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Camera, Check, Plus, X, Trash2 } from 'lucide-react'
+import { Camera, Check, Plus, X, Trash2, Sparkles } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
 import { upsertLogForDate, todayDateString, fetchProgressSummary } from '../../lib/dailyLog'
-import { insertWorkout, updateWorkout, deleteWorkout } from '../../lib/workouts'
+import { insertWorkout, updateWorkout, deleteWorkout, fetchWorkoutsForDate } from '../../lib/workouts'
 import { fileToBase64 } from '../../lib/image'
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
@@ -24,13 +24,16 @@ function fieldsFromWorkout(workout) {
   }
 }
 
-export default function WorkoutLog({ date, workout, onBack, onClose, onSaved }) {
+export default function WorkoutLog({ date, workout, plannedLabel, onBack, onClose, onSaved }) {
   const { user, profile } = useAuth()
   const logDate = date ?? todayDateString()
   const isEditing = Boolean(workout?.id)
 
   const [mode, setMode] = useState('photo')
-  const [fields, setFields] = useState(() => (isEditing ? fieldsFromWorkout(workout) : EMPTY_FIELDS))
+  const [fields, setFields] = useState(() =>
+    isEditing ? fieldsFromWorkout(workout) : { ...EMPTY_FIELDS, activity_name: plannedLabel || '' },
+  )
+  const [feedback, setFeedback] = useState(null)
   const [rawExtraction, setRawExtraction] = useState(null)
 
   const [analyzing, setAnalyzing] = useState(false)
@@ -147,25 +150,53 @@ export default function WorkoutLog({ date, workout, onBack, onClose, onSaved }) 
 
       if (isEditing) {
         await updateWorkout(workout.id, activityFields)
-      } else {
-        // Ensure the daily_logs row exists before we can link the workout.
-        const dailyLog = await upsertLogForDate(user.id, logDate, {})
-        const loggedAt = logDate === todayDateString() ? undefined : `${logDate}T12:00:00`
-
-        await insertWorkout(user.id, dailyLog.id, {
-          ...activityFields,
-          source: mode === 'photo' ? 'photo' : 'manual',
-          raw_ai_extraction: mode === 'photo' ? rawExtraction : null,
-          ...(loggedAt ? { logged_at: loggedAt } : {}),
-        })
-
-        // day_type is derived from whether a workouts row exists that day —
-        // the ensure-call above ran before this insert, so re-derive now.
-        await upsertLogForDate(user.id, logDate, {})
+        onSaved?.()
+        onClose()
+        return
       }
 
+      // Ensure the daily_logs row exists before we can link the workout.
+      const dailyLog = await upsertLogForDate(user.id, logDate, {})
+      const loggedAt = logDate === todayDateString() ? undefined : `${logDate}T12:00:00`
+
+      const inserted = await insertWorkout(user.id, dailyLog.id, {
+        ...activityFields,
+        source: mode === 'photo' ? 'photo' : 'manual',
+        raw_ai_extraction: mode === 'photo' ? rawExtraction : null,
+        planned_label: plannedLabel || null,
+        ...(loggedAt ? { logged_at: loggedAt } : {}),
+      })
+
+      // day_type is derived from whether a workouts row exists that day —
+      // the ensure-call above ran before this insert, so re-derive now.
+      await upsertLogForDate(user.id, logDate, {})
+
       onSaved?.()
-      onClose()
+
+      // Best-effort AI feedback on the session — never blocks the save.
+      let feedbackText = null
+      try {
+        const existing = await fetchWorkoutsForDate(user.id, logDate)
+        const { data, error } = await supabase.functions.invoke('analyze-training-session', {
+          body: {
+            planned_label: plannedLabel || null,
+            session: activityFields,
+            other_sessions_today: Math.max(existing.length - 1, 0),
+          },
+        })
+        if (!error && data?.feedback) {
+          feedbackText = data.feedback
+          await updateWorkout(inserted.id, { ai_feedback: feedbackText })
+        }
+      } catch {
+        // non-fatal
+      }
+
+      if (feedbackText) {
+        setFeedback(feedbackText)
+      } else {
+        onClose()
+      }
     } catch (err) {
       setSaveError(err.message || 'Could not save workout.')
     } finally {
@@ -186,6 +217,28 @@ export default function WorkoutLog({ date, workout, onBack, onClose, onSaved }) 
       setSaveError(err.message || 'Could not delete workout.')
       setDeleting(false)
     }
+  }
+
+  if (feedback) {
+    return (
+      <div className="absolute inset-0 bg-bg z-20 flex flex-col overflow-y-auto">
+        <SheetHeader title="SESSION LOGGED" onClose={onClose} />
+        <div className="px-4 pb-8">
+          <Panel className="mb-4">
+            <Eyebrow>
+              <Sparkles size={11} className="inline mr-1.5 -translate-y-px" /> Coach Feedback
+            </Eyebrow>
+            <div className="text-[13px] text-fg leading-relaxed">{feedback}</div>
+          </Panel>
+          <button
+            onClick={onClose}
+            className="w-full bg-signal rounded-[9px] py-2.5 text-[#06150F] font-mono text-[12px] font-bold"
+          >
+            DONE
+          </button>
+        </div>
+      </div>
+    )
   }
 
   const showForm = isEditing || mode === 'manual' || extracted

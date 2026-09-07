@@ -6,7 +6,7 @@
    instrument-panel aesthetic.
    ============================================================ */
 @theme {
-  --color-bg: #0a0c0b;
+  --color-bg: #232a27;
   --color-panel: #121614;
   --color-panel-raised: #161b19;
   --color-hairline: #242c29;
@@ -49,5 +49,5 @@ body {
 }
 
 .bg-vignette {
-  background: radial-gradient(120% 90% at 50% -10%, #141a17 0%, #0a0c0b 55%);
+  background: radial-gradient(120% 90% at 50% -10%, #323b37 0%, #232a27 55%);
 }
