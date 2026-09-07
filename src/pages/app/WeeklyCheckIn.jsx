@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../context/AuthContext'
 import { fetchLogsInRange } from '../../lib/dailyLog'
 import { fetchWorkoutsInRange } from '../../lib/workouts'
+import { fileToBase64 } from '../../lib/image'
 import {
   currentWeekStart,
   fetchWeeklyCheckin,
@@ -15,8 +16,25 @@ import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
 import SheetHeader from '../../components/ui/SheetHeader'
 
+function previousWeekStart(weekStart) {
+  const d = new Date(`${weekStart}T00:00:00`)
+  d.setDate(d.getDate() - 7)
+  return d.toISOString().slice(0, 10)
+}
+
+// Fetches an existing progress photo (by storage path) and returns it in
+// the same { base64, mediaType } shape fileToBase64 produces, for sending
+// to the vision endpoint alongside this week's newly-picked photo.
+async function existingPhotoToBase64(photoPath) {
+  const url = await getProgressPhotoUrl(photoPath)
+  if (!url) return null
+  const res = await fetch(url)
+  const blob = await res.blob()
+  return fileToBase64(blob)
+}
+
 export default function WeeklyCheckIn({ onBack, onClose, onSaved }) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const weekStart = currentWeekStart()
 
   const [loading, setLoading] = useState(true)
@@ -29,6 +47,7 @@ export default function WeeklyCheckIn({ onBack, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [feedback, setFeedback] = useState(null)
+  const [photoAssessment, setPhotoAssessment] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -38,6 +57,7 @@ export default function WeeklyCheckIn({ onBack, onClose, onSaved }) {
         setExisting(row)
         setSummary(row.summary ?? '')
         setFeedback(row.ai_feedback ?? null)
+        setPhotoAssessment(row.photo_assessment ?? null)
         if (row.photo_path) {
           const url = await getProgressPhotoUrl(row.photo_path).catch(() => null)
           if (active) setExistingPhotoUrl(url)
@@ -72,8 +92,13 @@ export default function WeeklyCheckIn({ onBack, onClose, onSaved }) {
 
       onSaved?.()
 
-      // Best-effort AI feedback on the week — never blocks the save.
+      // Best-effort AI feedback on the week — never blocks the save. Two
+      // independent calls: a data-driven note (summary vs logged numbers)
+      // and, only when a fresh photo was picked this session, a vision
+      // assessment of the photo itself (compared against last week's, if
+      // one exists).
       let feedbackText = null
+      let photoAssessmentText = null
       try {
         const weekEnd = new Date(`${weekStart}T00:00:00`)
         weekEnd.setDate(weekEnd.getDate() + 6)
@@ -82,19 +107,58 @@ export default function WeeklyCheckIn({ onBack, onClose, onSaved }) {
           fetchLogsInRange(user.id, weekStart, weekEndStr),
           fetchWorkoutsInRange(user.id, weekStart, weekEndStr),
         ])
-        const { data, error } = await supabase.functions.invoke('generate-weekly-note', {
-          body: { summary, recent_daily_logs: logs, workouts_count: workouts.length },
-        })
-        if (!error && data?.note) {
-          feedbackText = data.note
-          await upsertWeeklyCheckin(user.id, weekStart, { ai_feedback: feedbackText })
+
+        const notePromise = supabase.functions
+          .invoke('generate-weekly-note', {
+            body: { summary, recent_daily_logs: logs, workouts_count: workouts.length },
+          })
+          .catch(() => null)
+
+        const photoPromise = photoFile
+          ? (async () => {
+              const { base64, mediaType } = await fileToBase64(photoFile)
+              let previous = null
+              try {
+                const prevCheckin = await fetchWeeklyCheckin(user.id, previousWeekStart(weekStart))
+                if (prevCheckin?.photo_path) previous = await existingPhotoToBase64(prevCheckin.photo_path)
+              } catch {
+                // no previous photo to compare against — fine
+              }
+              return supabase.functions.invoke('assess-weekly-photo', {
+                body: {
+                  image_base64: base64,
+                  media_type: mediaType,
+                  previous_image_base64: previous?.base64,
+                  previous_media_type: previous?.mediaType,
+                  summary,
+                  dietary_approach: profile?.dietary_approach,
+                },
+              })
+            })().catch(() => null)
+          : Promise.resolve(null)
+
+        const [noteResult, photoResult] = await Promise.all([notePromise, photoPromise])
+
+        if (noteResult && !noteResult.error && noteResult.data?.note) {
+          feedbackText = noteResult.data.note
+        }
+        if (photoResult && !photoResult.error && photoResult.data?.assessment) {
+          photoAssessmentText = photoResult.data.assessment
+        }
+
+        if (feedbackText || photoAssessmentText) {
+          await upsertWeeklyCheckin(user.id, weekStart, {
+            ...(feedbackText ? { ai_feedback: feedbackText } : {}),
+            ...(photoAssessmentText ? { photo_assessment: photoAssessmentText } : {}),
+          })
         }
       } catch {
         // non-fatal
       }
 
-      if (feedbackText) {
+      if (feedbackText || photoAssessmentText) {
         setFeedback(feedbackText)
+        setPhotoAssessment(photoAssessmentText)
       } else {
         onClose()
       }
@@ -150,6 +214,15 @@ export default function WeeklyCheckIn({ onBack, onClose, onSaved }) {
             className="w-full bg-panel-raised border border-hairline rounded-[8px] px-3 py-2.5 text-[13px] text-fg outline-none focus:border-signal transition-colors resize-none"
           />
         </Panel>
+
+        {photoAssessment && (
+          <Panel className="mb-3.5 border-l-2 border-signal">
+            <Eyebrow>
+              <Sparkles size={11} className="inline mr-1.5 -translate-y-px" /> Photo Assessment
+            </Eyebrow>
+            <div className="text-[13px] text-fg leading-relaxed">{photoAssessment}</div>
+          </Panel>
+        )}
 
         {feedback && (
           <Panel className="mb-3.5 border-l-2 border-info">

@@ -70,7 +70,7 @@ export default function CoachScreen() {
           <div key={i} className={`flex mb-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-[84%] text-[13px] leading-relaxed px-3.5 py-2.5 rounded-[12px] ${
-                m.role === 'user' ? 'bg-info text-[#06110F]' : 'bg-panel border border-hairline text-fg'
+                m.role === 'user' ? 'bg-info text-white' : 'bg-panel border border-hairline text-fg'
               }`}
             >
               {m.text}

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { fetchLogsInRange, fetchProgressSummary, todayDateString } from '../../lib/dailyLog'
+import { fetchWorkoutsInRange } from '../../lib/workouts'
 import { fetchWeeklyCheckins, getProgressPhotoUrl } from '../../lib/weeklyCheckins'
+import { fetchTrainingPlan, computeComplianceByDate } from '../../lib/trainingPlan'
 import Calendar from './trends/Calendar'
 import DayDetail from './trends/DayDetail'
 import WeightChart from './trends/WeightChart'
@@ -25,6 +27,8 @@ export default function TrendsScreen() {
   const [monthDate, setMonthDate] = useState(() => new Date())
   const [selectedDate, setSelectedDate] = useState(today)
   const [monthLogs, setMonthLogs] = useState([])
+  const [monthWorkouts, setMonthWorkouts] = useState([])
+  const [planDays, setPlanDays] = useState([])
   const [chartLogs, setChartLogs] = useState([])
   const [progress, setProgress] = useState(null)
   const [weeklyCheckins, setWeeklyCheckins] = useState([])
@@ -37,8 +41,14 @@ export default function TrendsScreen() {
 
   const loadMonth = useCallback(async () => {
     const { start, end } = monthRange(monthDate)
-    const rows = await fetchLogsInRange(user.id, start, end)
-    setMonthLogs(rows)
+    const [logRows, workoutRows, plan] = await Promise.all([
+      fetchLogsInRange(user.id, start, end),
+      fetchWorkoutsInRange(user.id, start, end),
+      fetchTrainingPlan(user.id),
+    ])
+    setMonthLogs(logRows)
+    setMonthWorkouts(workoutRows)
+    setPlanDays(plan)
   }, [user.id, monthDate])
 
   const loadChartData = useCallback(async () => {
@@ -69,6 +79,14 @@ export default function TrendsScreen() {
     monthLogs.map((l) => [l.log_date, { hasLog: true, mealScore: l.meal_score }]),
   )
 
+  const { start: monthStart, end: monthEnd } = monthRange(monthDate)
+  const monthDateStrings = []
+  for (let d = new Date(`${monthStart}T00:00:00`); d.toISOString().slice(0, 10) <= monthEnd; d.setDate(d.getDate() + 1)) {
+    const ds = d.toISOString().slice(0, 10)
+    if (ds <= today) monthDateStrings.push(ds)
+  }
+  const complianceByDate = computeComplianceByDate(planDays, monthWorkouts, monthDateStrings)
+
   function handleDataSaved() {
     setRefreshKey((k) => k + 1)
   }
@@ -98,6 +116,9 @@ export default function TrendsScreen() {
                     })}
                   </div>
                   {wc.summary && <div className="text-[12px] text-fg leading-relaxed line-clamp-2">{wc.summary}</div>}
+                  {wc.photo_assessment && (
+                    <div className="text-[11px] text-signal leading-relaxed mt-1 line-clamp-2">{wc.photo_assessment}</div>
+                  )}
                   {wc.ai_feedback && (
                     <div className="text-[11px] text-fg-muted leading-relaxed mt-1 line-clamp-2">{wc.ai_feedback}</div>
                   )}
@@ -112,6 +133,7 @@ export default function TrendsScreen() {
         <Calendar
           monthDate={monthDate}
           logsByDate={logsByDate}
+          complianceByDate={complianceByDate}
           selectedDate={selectedDate}
           todayDate={today}
           minDate={profile?.protocol_start_date}
@@ -119,12 +141,21 @@ export default function TrendsScreen() {
           onPrevMonth={() => setMonthDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
           onNextMonth={() => setMonthDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
         />
+        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-hairline">
+          <div className="flex items-center gap-1.5 font-mono text-[9.5px] text-fg-dim">
+            <span className="w-2 h-[3px] bg-signal inline-block rounded-full" /> PLAN COMPLETE
+          </div>
+          <div className="flex items-center gap-1.5 font-mono text-[9.5px] text-fg-dim">
+            <span className="w-2 h-[3px] bg-alert inline-block rounded-full" /> PLAN MISSED
+          </div>
+        </div>
       </div>
 
       {selectedDate && (
         <DayDetail
           date={selectedDate}
           key={`${selectedDate}-${refreshKey}`}
+          planDays={planDays}
           onEditCheckIn={setCheckInDate}
           onAddMeal={(date) => setMealSheet({ date })}
           onEditMeal={(date, meal) => setMealSheet({ date, meal })}

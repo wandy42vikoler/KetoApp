@@ -409,7 +409,7 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
 
         {meals.map((m) => (
           <div key={m.id} className="flex gap-2.5 py-2 border-b border-hairline last:border-b-0">
-            <div className="w-[26px] h-[26px] rounded-[7px] bg-[#1B2422] flex items-center justify-center flex-shrink-0">
+            <div className="w-[26px] h-[26px] rounded-[7px] bg-panel-raised flex items-center justify-center flex-shrink-0">
               <Camera size={12} className="text-info" />
             </div>
             <div className="flex-1">

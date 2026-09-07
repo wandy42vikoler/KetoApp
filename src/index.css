@@ -1,35 +1,36 @@
 @import "tailwindcss";
 
 /* ============================================================
-   TOKENS — "Protocol Console" design language, ported from
-   KetoApp.jsx (the visual reference). Dark, clinical,
-   instrument-panel aesthetic.
+   TOKENS — "Protocol Console" design language, now on a bright
+   cream-white base. Same clinical instrument-panel structure,
+   flipped to a light, warm palette instead of dark.
    ============================================================ */
 @theme {
-  --color-bg: #232a27;
-  --color-panel: #121614;
-  --color-panel-raised: #161b19;
-  --color-hairline: #242c29;
-  --color-hairline-lit: #33403c;
+  --color-bg: #f4efe3;
+  --color-panel: #ffffff;
+  --color-panel-raised: #f2ecdd;
+  --color-hairline: #e7dfc9;
+  --color-hairline-lit: #d2c6a5;
 
-  --color-fg: #e7ece8;
-  --color-fg-muted: #8a9a94;
-  --color-fg-dim: #546059;
+  --color-fg: #262319;
+  --color-fg-muted: #6e6752;
+  --color-fg-dim: #9c927a;
 
-  --color-signal: #3fce8e;
-  --color-signal-dim: #1b4a38;
-  --color-alert: #e2555a;
-  --color-alert-dim: #4a2225;
-  --color-caution: #e3a93f;
-  --color-caution-dim: #4a3b1c;
-  --color-info: #5b8fa8;
+  --color-signal: #1e9e66;
+  --color-signal-dim: #dcf2e5;
+  --color-alert: #c13a3f;
+  --color-alert-dim: #f7dedd;
+  --color-caution: #b9791a;
+  --color-caution-dim: #f5e7cb;
+  --color-info: #3c7690;
+  --color-info-dim: #dceaf0;
 
   --font-mono: "SF Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   --font-sans: -apple-system, "Segoe UI", system-ui, sans-serif;
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {
@@ -49,5 +50,5 @@ body {
 }
 
 .bg-vignette {
-  background: radial-gradient(120% 90% at 50% -10%, #323b37 0%, #232a27 55%);
+  background: radial-gradient(120% 90% at 50% -10%, #fffdf6 0%, #f4efe3 55%);
 }

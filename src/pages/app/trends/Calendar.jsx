@@ -18,6 +18,7 @@ function scoreColorClass(score) {
 export default function Calendar({
   monthDate,
   logsByDate,
+  complianceByDate = {},
   selectedDate,
   todayDate,
   minDate,
@@ -64,13 +65,14 @@ export default function Calendar({
           const isSelected = dateStr === selectedDate
           const isToday = dateStr === todayDate
           const isOutOfRange = dateStr > todayDate || (minDate && dateStr < minDate)
+          const compliance = complianceByDate[dateStr] // 'done' | 'missed' | null
 
           return (
             <button
               key={dateStr}
               onClick={() => !isOutOfRange && onSelectDate(dateStr)}
               disabled={isOutOfRange}
-              className={`aspect-square rounded-[7px] flex flex-col items-center justify-center gap-0.5 border ${
+              className={`relative aspect-square rounded-[7px] flex flex-col items-center justify-center gap-0.5 border overflow-hidden ${
                 isSelected
                   ? 'border-signal bg-signal-dim/40'
                   : isToday
@@ -78,6 +80,13 @@ export default function Calendar({
                     : 'border-transparent'
               } ${isOutOfRange ? 'opacity-30' : ''}`}
             >
+              {compliance && (
+                <span
+                  className={`absolute left-0 right-0 bottom-0 h-[3px] ${
+                    compliance === 'done' ? 'bg-signal' : 'bg-alert'
+                  }`}
+                />
+              )}
               <span className="font-mono text-[10.5px] text-fg">{day}</span>
               {entry?.mealScore != null ? (
                 <span className={`font-mono text-[8.5px] font-bold ${scoreColorClass(entry.mealScore)}`}>

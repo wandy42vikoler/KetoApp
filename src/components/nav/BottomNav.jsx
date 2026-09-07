@@ -17,7 +17,7 @@ export default function BottomNav({ active, onSelect, onFab }) {
             <button
               key="fab"
               onClick={onFab}
-              className="w-[52px] h-[52px] rounded-full bg-signal flex items-center justify-center -mt-[22px] shadow-[0_4px_18px_rgba(63,206,142,0.4)]"
+              className="w-[52px] h-[52px] rounded-full bg-signal flex items-center justify-center -mt-[22px] shadow-[0_4px_18px_rgba(30,158,102,0.4)]"
             >
               <Plus size={22} color="#06150F" />
             </button>

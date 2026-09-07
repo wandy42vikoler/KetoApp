@@ -13,7 +13,7 @@ export default function MacroBar({ label, value, target, unit }) {
           <span className="text-fg-dim"> / {target}{unit}</span>
         </span>
       </div>
-      <div className="h-[5px] bg-[#1B211F] rounded-[3px] overflow-hidden">
+      <div className="h-[5px] bg-panel-raised rounded-[3px] overflow-hidden">
         <div
           className={`h-full rounded-[3px] transition-[width] duration-300 ease-out ${barColor}`}
           style={{ width: `${pct}%` }}

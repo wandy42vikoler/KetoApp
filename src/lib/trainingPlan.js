@@ -67,3 +67,36 @@ export function currentWeekRange() {
 
   return { start: datesByWeekday[1], end: datesByWeekday[7], datesByWeekday }
 }
+
+// Compliance per date, for a set of past-or-today date strings: for each
+// date, counts how many *required* plan rows exist for that weekday and
+// how many workouts were actually logged that date. 'done' if logged
+// count meets or exceeds required count, 'missed' if it falls short,
+// null if nothing was scheduled that weekday (rest day / no plan set).
+export function computeComplianceByDate(planDays, workouts, dateStrings) {
+  const grouped = groupByWeekday(planDays)
+  const requiredCountByWeekday = {}
+  for (let wd = 1; wd <= 7; wd++) {
+    requiredCountByWeekday[wd] = (grouped[wd] ?? []).filter((r) => r.required !== false).length
+  }
+
+  const workoutCountByDate = {}
+  for (const w of workouts) {
+    const d = (w.logged_at ?? '').slice(0, 10)
+    if (!d) continue
+    workoutCountByDate[d] = (workoutCountByDate[d] ?? 0) + 1
+  }
+
+  const result = {}
+  for (const dateStr of dateStrings) {
+    const wd = isoWeekday(new Date(`${dateStr}T00:00:00`))
+    const required = requiredCountByWeekday[wd] ?? 0
+    if (required === 0) {
+      result[dateStr] = null
+      continue
+    }
+    const logged = workoutCountByDate[dateStr] ?? 0
+    result[dateStr] = logged >= required ? 'done' : 'missed'
+  }
+  return result
+}

@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react'
-import { Camera, Dumbbell, Pencil, Plus } from 'lucide-react'
+import { Camera, Check, Dumbbell, Pencil, Plus, X } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
 import { fetchLogForDate } from '../../../lib/dailyLog'
 import { fetchMealsForDate, sumMealTotals } from '../../../lib/meals'
 import { fetchWorkoutsForDate } from '../../../lib/workouts'
+import { isoWeekday, groupByWeekday } from '../../../lib/trainingPlan'
 import Panel from '../../../components/ui/Panel'
 import Eyebrow from '../../../components/ui/Eyebrow'
 
-export default function DayDetail({ date, onEditCheckIn, onAddMeal, onEditMeal, onAddWorkout, onEditWorkout }) {
+export default function DayDetail({
+  date,
+  planDays = [],
+  onEditCheckIn,
+  onAddMeal,
+  onEditMeal,
+  onAddWorkout,
+  onEditWorkout,
+}) {
   const { user } = useAuth()
   const [log, setLog] = useState(null)
   const [meals, setMeals] = useState([])
@@ -39,6 +48,10 @@ export default function DayDetail({ date, onEditCheckIn, onAddMeal, onEditMeal, 
     month: 'short',
     day: 'numeric',
   })
+
+  const weekday = isoWeekday(new Date(`${date}T00:00:00`))
+  const plannedToday = (groupByWeekday(planDays)[weekday] ?? []).filter((r) => r.required !== false)
+  const loggedCount = workouts.length
 
   if (loading) {
     return (
@@ -79,6 +92,29 @@ export default function DayDetail({ date, onEditCheckIn, onAddMeal, onEditMeal, 
       )}
       {log?.notes && <div className="font-mono text-[10.5px] text-fg-dim mb-2">{log.notes}</div>}
 
+      {plannedToday.length > 0 && (
+        <div className="mb-2 pb-2 border-b border-hairline">
+          <div className="font-mono text-[9.5px] text-fg-dim tracking-[0.1em] mb-1.5">
+            PLAN — {loggedCount >= plannedToday.length ? 'COMPLETE' : `${loggedCount}/${plannedToday.length} LOGGED`}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {plannedToday.map((row, i) => {
+              const done = i < loggedCount
+              return (
+                <span
+                  key={row.id}
+                  className={`inline-flex items-center gap-1 font-mono text-[10px] rounded-[5px] px-1.5 py-0.5 border ${
+                    done ? 'text-signal border-signal/35 bg-signal-dim/60' : 'text-alert border-alert/35 bg-alert-dim/60'
+                  }`}
+                >
+                  {done ? <Check size={9} /> : <X size={9} />} {row.label}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {meals.length > 0 && (
         <div className="font-mono text-[10px] text-fg-dim mb-1.5 pt-2 border-t border-hairline">
           {meals.length} meal{meals.length > 1 ? 's' : ''} · {totals.calories}kcal · P{totals.protein} F{totals.fat} C
@@ -92,7 +128,7 @@ export default function DayDetail({ date, onEditCheckIn, onAddMeal, onEditMeal, 
           onClick={() => onEditMeal(date, m)}
           className="w-full flex items-center gap-2.5 py-1.5 text-left bg-transparent border-none"
         >
-          <div className="w-[22px] h-[22px] rounded-[6px] bg-[#1B2422] flex items-center justify-center flex-shrink-0">
+          <div className="w-[22px] h-[22px] rounded-[6px] bg-panel-raised flex items-center justify-center flex-shrink-0">
             <Camera size={11} className="text-info" />
           </div>
           <div className="flex-1 min-w-0">
