@@ -38,8 +38,14 @@ export async function deleteMeal(mealId) {
   if (error) throw error
 }
 
+// Rounds to 1 decimal — floating point addition otherwise produces values
+// like 68.70000000000002 once a few meals are summed.
+function round1(n) {
+  return Math.round(n * 10) / 10
+}
+
 export function sumMealTotals(meals) {
-  return meals.reduce(
+  const totals = meals.reduce(
     (acc, m) => ({
       calories: acc.calories + (m.calories ?? 0),
       protein: acc.protein + (m.protein_g ?? 0),
@@ -48,4 +54,10 @@ export function sumMealTotals(meals) {
     }),
     { calories: 0, protein: 0, fat: 0, carbs: 0 },
   )
+  return {
+    calories: Math.round(totals.calories),
+    protein: round1(totals.protein),
+    fat: round1(totals.fat),
+    carbs: round1(totals.carbs),
+  }
 }

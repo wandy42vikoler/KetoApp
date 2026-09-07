@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Moon, Droplet, Footprints, Sparkles, Camera, Dumbbell, Pill } from 'lucide-react'
+import { Moon, Droplet, Footprints, Sparkles, Camera, Dumbbell, Pill, Flame } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchTodayLog, fetchProgressSummary, todayDateString } from '../../lib/dailyLog'
@@ -198,16 +198,23 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
       {effectiveTarget ? (
         <Panel className="mb-3.5">
           <Eyebrow right={<Stamp status={carbStatus} />}>Macro Burn-Down</Eyebrow>
+          {caloriesBurnedToday > 0 && (
+            <div className="flex items-center gap-1.5 mb-3 -mt-0.5">
+              <Flame size={13} className="text-alert" />
+              <span className="font-mono text-[11.5px] text-fg-muted">
+                <span className="text-alert font-bold">{Math.round(caloriesBurnedToday)}</span> kcal burned from
+                training today
+              </span>
+            </div>
+          )}
           <MacroBar label="CALORIES" value={totals.calories} target={Math.round(effectiveTarget.calories)} unit="" />
           <MacroBar label="PROTEIN" value={totals.protein} target={effectiveTarget.protein_g} unit="g" />
           <MacroBar label="FAT" value={totals.fat} target={Math.round(effectiveTarget.fat_g * 10) / 10} unit="g" />
           <MacroBar label="CARBS" value={totals.carbs} target={effectiveTarget.carbs_g} unit="g" />
           {adjustmentKcal > 0 && (
             <div className="font-mono text-[10px] text-fg-dim mt-2.5 pt-2.5 border-t border-hairline leading-relaxed">
-              +{Math.round(adjustmentKcal)}kcal / +{(adjustmentKcal / 9).toFixed(1)}g fat added to target
-              <br />
-              from {Math.round(caloriesBurnedToday)}kcal estimated workout burn × {CALORIE_BURN_DAMPENING} dampening
-              (estimates run high — protein and carbs stay fixed).
+              Target adjusted +{Math.round(adjustmentKcal)}kcal / +{(adjustmentKcal / 9).toFixed(1)}g fat ({Math.round(CALORIE_BURN_DAMPENING * 100)}%
+              of estimated burn — protein and carbs stay fixed, estimates run high).
             </div>
           )}
         </Panel>
