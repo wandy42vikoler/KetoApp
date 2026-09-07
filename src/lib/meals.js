@@ -44,7 +44,7 @@ export function sumMealTotals(meals) {
       calories: acc.calories + (m.calories ?? 0),
       protein: acc.protein + (m.protein_g ?? 0),
       fat: acc.fat + (m.fat_g ?? 0),
-      carbs: acc.carbs + (m.net_carbs_g ?? 0),
+      carbs: acc.carbs + (m.carbs_g ?? 0),
     }),
     { calories: 0, protein: 0, fat: 0, carbs: 0 },
   )

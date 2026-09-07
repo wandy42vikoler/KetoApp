@@ -7,8 +7,12 @@ const SYSTEM_PROMPT = `${COACH_VOICE}
 
 You will be given a day's logged meals and that day's macro target. Score
 adherence 1-10: how well the day's totals hit the target (protein
-sufficiency, net carb ceiling respected, calorie adherence), not effort or
-intent. Write one line of justification citing the actual numbers.
+sufficiency, calorie adherence, and carbs — score carbs on closeness to the
+target either direction, since depending on the user's plan the carb number
+can be a ceiling to stay under or a minimum to hit for training fuel; don't
+assume lower is automatically better). Score against the actual numbers,
+not effort or intent. Write one line of justification citing the actual
+numbers.
 
 Respond with ONLY a raw JSON object, no markdown code fences, no prose
 outside the JSON, matching exactly this shape:

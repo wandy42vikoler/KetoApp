@@ -32,7 +32,7 @@ export async function buildCoachContext(userId, profile) {
 
   const { data: target } = await supabase
     .from('targets')
-    .select('calories, protein_g, fat_g, net_carbs_g')
+    .select('calories, protein_g, fat_g, carbs_g')
     .eq('user_id', userId)
     .eq('day_type', dayType)
     .maybeSingle()
@@ -46,6 +46,9 @@ export async function buildCoachContext(userId, profile) {
       goal_weight_kg: profile?.goal_weight_kg,
       goal_timeline_weeks: profile?.goal_timeline_weeks,
       protocol_start_date: profile?.protocol_start_date,
+      dietary_approach: profile?.dietary_approach,
+      target_event_name: profile?.target_event_name,
+      target_event_date: profile?.target_event_date,
     },
     progress,
     today: {

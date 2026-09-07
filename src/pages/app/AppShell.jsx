@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import BottomNav from '../../components/nav/BottomNav'
 import Dashboard from './Dashboard'
-import TargetsScreen from './TargetsScreen'
+import PlanScreen from './PlanScreen'
 import TrendsScreen from './TrendsScreen'
 import CoachScreen from './CoachScreen'
 import LogSheet from './LogSheet'
@@ -31,7 +31,7 @@ export default function AppShell() {
         )}
         {tab === 'trends' && <TrendsScreen />}
         {tab === 'coach' && <CoachScreen />}
-        {tab === 'targets' && <TargetsScreen />}
+        {tab === 'targets' && <PlanScreen />}
       </div>
 
       <BottomNav active={tab} onSelect={setTab} onFab={() => setSheetOpen(true)} />

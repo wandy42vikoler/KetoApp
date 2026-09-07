@@ -3,6 +3,22 @@ import { supabase } from '../lib/supabaseClient'
 
 const AuthContext = createContext(undefined)
 
+// Default weekly training split seeded onto a brand-new profile (see
+// loadProfile below). weekday is ISO: 1=Monday .. 7=Sunday. Matches the
+// current Morocco shred-plan structure — fully editable from the Plan tab,
+// and irrelevant to anyone else who ever uses this build.
+const DEFAULT_TRAINING_PLAN = [
+  { weekday: 1, label: 'Pull + light run or cardio (Zone 2–3)', required: true, sort_order: 0 },
+  { weekday: 2, label: 'Freeletics', required: true, sort_order: 0 },
+  { weekday: 2, label: 'Pilates or Vinyasa Yoga (optional)', required: false, sort_order: 1 },
+  { weekday: 3, label: 'Push + cardio (run, tennis, swim, etc.)', required: true, sort_order: 0 },
+  { weekday: 4, label: 'Freeletics', required: true, sort_order: 0 },
+  { weekday: 4, label: 'Pilates or Vinyasa Yoga (optional)', required: false, sort_order: 1 },
+  { weekday: 5, label: 'Leg day', required: true, sort_order: 0 },
+  { weekday: 6, label: 'Rest — recreational sports only', required: false, sort_order: 0 },
+  { weekday: 7, label: 'Rest — optional Pilates/Vinyasa Yoga', required: false, sort_order: 0 },
+]
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -30,6 +46,16 @@ export function AuthProvider({ children }) {
       .single()
 
     if (insertError) throw insertError
+
+    // Seed a default weekly training split alongside the new profile so the
+    // Plan screen isn't empty on first run. Best-effort — a failure here
+    // shouldn't block login, the user can just add days manually.
+    try {
+      await supabase.from('training_plan_days').insert(DEFAULT_TRAINING_PLAN.map((row) => ({ user_id: userId, ...row })))
+    } catch {
+      // non-fatal
+    }
+
     setProfile(created)
     return created
   }, [])

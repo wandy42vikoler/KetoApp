@@ -18,4 +18,4 @@ dist-ssr
 
 supabase/.temp
 
-.claude/settings.local.json
+.claude/*

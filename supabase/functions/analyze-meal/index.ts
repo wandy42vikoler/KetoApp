@@ -2,11 +2,9 @@ import { corsHeaders } from '../_shared/cors.ts'
 import { callClaude } from '../_shared/anthropic.ts'
 import { extractJson } from '../_shared/extractJson.ts'
 
-const SYSTEM_PROMPT = `You are estimating macros for a meal photo, for a strict
-ketogenic diet protocol. Be conservative and clinical in portion sizing —
-prefer slight underestimates of quantity over generous ones. Flag any
-visible bread, grain, rice, pasta, sugar, or other high-carb item by name
-in the notes field, since these are protocol violations on a keto diet.
+const SYSTEM_PROMPT = `You are estimating macros for a meal photo. Be
+conservative and clinical in portion sizing — prefer slight underestimates
+of quantity over generous ones.
 
 The user may also provide a short text note alongside the photo (e.g. exact
 portion weights, ingredients not visible in the shot, cooking method). Treat
@@ -17,13 +15,17 @@ uncertainty in a photo-only estimate.
 
 Respond with ONLY a raw JSON object, no markdown code fences, no prose,
 matching exactly this shape:
-{"description":string,"protein_g":number,"fat_g":number,"net_carbs_g":number,"calories":number,"confidence":"low"|"medium"|"high","notes":string}
+{"description":string,"protein_g":number,"fat_g":number,"carbs_g":number,"calories":number,"confidence":"low"|"medium"|"high","notes":string}
 
 description: short factual description of what's on the plate.
 confidence: "low" if portions/ingredients are hard to judge from the image
 and no user note fills the gap, "high" if the plate is clear and
 unambiguous or the user note resolves the ambiguity, "medium" otherwise.
-notes: one line — flag carb risks, or state there are none.`
+notes: one line — flag anything nutritionally notable (very carb-dense,
+very high sodium, hard to estimate accurately), stated neutrally rather
+than as good or bad — the app compares it against the user's own targets,
+which vary by their current plan. State there are none if there's nothing
+notable.`
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

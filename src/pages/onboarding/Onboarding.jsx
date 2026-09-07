@@ -8,20 +8,25 @@ import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
 import { Field, Select, ActivityLevelField, ACTIVITY_LEVELS } from '../../components/ui/FormField'
 
-const STEPS = ['basics', 'goals', 'generating', 'review']
+const STEPS = ['basics', 'goals', 'approach', 'generating', 'review']
 
-const EMPTY_MACROS = { calories: '', protein_g: '', fat_g: '', net_carbs_g: '' }
+const EMPTY_MACROS = { calories: '', protein_g: '', fat_g: '', carbs_g: '' }
 
 const activityNumeric = (value) => ACTIVITY_LEVELS.find((a) => a.value === value)?.numeric ?? 6
 
 export default function Onboarding() {
-  const { user, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [stepIndex, setStepIndex] = useState(0)
   const step = STEPS[stepIndex]
 
   const [basics, setBasics] = useState({ height_cm: '', gender: 'female', activity_level: 'moderate' })
   const [goals, setGoals] = useState({ starting_weight_kg: '', goal_weight_kg: '', goal_timeline_weeks: '' })
+  const [approach, setApproach] = useState({
+    target_event_name: profile?.target_event_name ?? '',
+    target_event_date: profile?.target_event_date ?? '',
+    dietary_approach: profile?.dietary_approach ?? '',
+  })
   const [targets, setTargets] = useState(EMPTY_MACROS)
   const [maintenanceCalories, setMaintenanceCalories] = useState(null)
   const [assessment, setAssessment] = useState(null)
@@ -45,6 +50,7 @@ export default function Onboarding() {
           starting_weight_kg: Number(goals.starting_weight_kg),
           goal_weight_kg: Number(goals.goal_weight_kg),
           goal_timeline_weeks: Number(goals.goal_timeline_weeks),
+          dietary_approach: approach.dietary_approach || undefined,
         },
       })
       if (error) throw error
@@ -100,6 +106,9 @@ export default function Onboarding() {
           goal_weight_kg: Number(goals.goal_weight_kg),
           goal_timeline_weeks: Number(goals.goal_timeline_weeks),
           protocol_start_date,
+          target_event_name: approach.target_event_name || null,
+          target_event_date: approach.target_event_date || null,
+          dietary_approach: approach.dietary_approach || null,
         })
         .eq('id', user.id)
       if (profileError) throw profileError
@@ -111,7 +120,7 @@ export default function Onboarding() {
         calories: Number(targets.calories),
         protein_g: Number(targets.protein_g),
         fat_g: Number(targets.fat_g),
-        net_carbs_g: Number(targets.net_carbs_g),
+        carbs_g: Number(targets.carbs_g),
       }
       const rows = ['rest', 'activity'].map((day_type) => ({
         user_id: user.id,
@@ -143,7 +152,11 @@ export default function Onboarding() {
         {step === 'basics' && <StepBasics basics={basics} setBasics={setBasics} onNext={() => goTo('goals')} />}
 
         {step === 'goals' && (
-          <StepGoals goals={goals} setGoals={setGoals} onBack={() => goTo('basics')} onNext={runGeneration} />
+          <StepGoals goals={goals} setGoals={setGoals} onBack={() => goTo('basics')} onNext={() => goTo('approach')} />
+        )}
+
+        {step === 'approach' && (
+          <StepApproach approach={approach} setApproach={setApproach} onBack={() => goTo('goals')} onNext={runGeneration} />
         )}
 
         {step === 'generating' && (
@@ -268,6 +281,52 @@ function StepGoals({ goals, setGoals, onBack, onNext }) {
   )
 }
 
+function StepApproach({ approach, setApproach, onBack, onNext }) {
+  return (
+    <Panel>
+      <Eyebrow>Plan</Eyebrow>
+      <div className="flex flex-col gap-4">
+        <Field
+          label="TARGET EVENT (OPTIONAL)"
+          value={approach.target_event_name}
+          onChange={(v) => setApproach((a) => ({ ...a, target_event_name: v }))}
+          placeholder="e.g. Morocco Surf Trip"
+        />
+        <Field
+          label="EVENT DATE (OPTIONAL)"
+          type="date"
+          value={approach.target_event_date}
+          onChange={(v) => setApproach((a) => ({ ...a, target_event_date: v }))}
+        />
+        <label className="block">
+          <div className="font-mono text-[9.5px] text-fg-dim tracking-[0.1em] mb-1.5">DIETARY APPROACH (OPTIONAL)</div>
+          <textarea
+            value={approach.dietary_approach}
+            onChange={(e) => setApproach((a) => ({ ...a, dietary_approach: e.target.value }))}
+            rows={4}
+            placeholder="The macro philosophy for this goal — low-carb, higher-carb for training, balanced, whatever it is. Leave blank for a balanced default. This steers target generation and the AI coach instead of a fixed diet template."
+            className="w-full bg-panel-raised border border-hairline rounded-[8px] px-3 py-2.5 text-[13px] text-fg outline-none focus:border-signal transition-colors resize-none"
+          />
+        </label>
+      </div>
+      <div className="flex gap-2 mt-5">
+        <button
+          onClick={onBack}
+          className="flex-1 bg-transparent border border-hairline-lit rounded-[9px] py-2.5 text-fg-muted font-mono text-[12px]"
+        >
+          BACK
+        </button>
+        <button
+          onClick={onNext}
+          className="flex-1 bg-signal rounded-[9px] py-2.5 text-[#06150F] font-mono text-[12px] font-bold flex items-center justify-center gap-1.5"
+        >
+          <Sparkles size={13} /> GENERATE TARGETS
+        </button>
+      </div>
+    </Panel>
+  )
+}
+
 function StepGenerating({ error, onRetry, onSkip }) {
   return (
     <Panel>
@@ -327,11 +386,11 @@ function StepReview({ targets, onFieldChange, assessment, onBack, onConfirm, sav
             onChange={(v) => onFieldChange('fat_g', v)}
           />
           <Field
-            label="NET CARBS"
+            label="CARBS"
             type="number"
             unit="g"
-            value={targets.net_carbs_g}
-            onChange={(v) => onFieldChange('net_carbs_g', v)}
+            value={targets.carbs_g}
+            onChange={(v) => onFieldChange('carbs_g', v)}
           />
         </div>
       </Panel>
