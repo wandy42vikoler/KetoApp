@@ -16,6 +16,7 @@ import { updateFoodGuide, FOOD_GUIDE_MEALS, EMPTY_FOOD_GUIDE } from '../../lib/f
 import Panel from '../../components/ui/Panel'
 import Eyebrow from '../../components/ui/Eyebrow'
 import { Field } from '../../components/ui/FormField'
+import ShoppingList from './ShoppingList'
 
 const EMPTY_MACROS = { calories: '', protein_g: '', fat_g: '', carbs_g: '' }
 
@@ -224,6 +225,7 @@ export default function PlanScreen() {
   const [foodGuide, setFoodGuide] = useState(profile?.food_guide ?? EMPTY_FOOD_GUIDE)
   const [foodGuideSaving, setFoodGuideSaving] = useState(false)
   const [foodGuideSavedAt, setFoodGuideSavedAt] = useState(null)
+  const [shoppingListOpen, setShoppingListOpen] = useState(false)
 
   useEffect(() => {
     setFoodGuide(profile?.food_guide ?? EMPTY_FOOD_GUIDE)
@@ -541,7 +543,17 @@ export default function PlanScreen() {
         >
           <Check size={14} /> {foodGuideSaving ? 'SAVING…' : 'SAVE FOOD GUIDE'}
         </button>
+        <button
+          onClick={() => setShoppingListOpen(true)}
+          className="w-full mt-2.5 bg-transparent border border-dashed border-hairline-lit rounded-[9px] py-2.5 text-info font-mono text-[11.5px] tracking-wide flex items-center justify-center gap-1.5"
+        >
+          <Sparkles size={13} /> SHOPPING LIST
+        </button>
       </Panel>
+
+      {shoppingListOpen && (
+        <ShoppingList onBack={() => setShoppingListOpen(false)} onClose={() => setShoppingListOpen(false)} />
+      )}
     </div>
   )
 }
