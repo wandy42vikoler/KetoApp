@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Moon, Droplet, Footprints, Sparkles, Camera, Dumbbell, Pill, Flame } from 'lucide-react'
+import { Moon, Droplet, Footprints, Sparkles, Camera, Dumbbell, Pill, Flame, Check } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchTodayLog, fetchProgressSummary, todayDateString } from '../../lib/dailyLog'
@@ -285,23 +285,42 @@ export default function Dashboard({ onOpenCheckIn, refreshKey }) {
           {todayPlan.length > 0 && (
             <div className="flex flex-col gap-2 pt-1 border-t border-hairline">
               <div className="font-mono text-[10px] text-fg-dim tracking-[0.1em] pt-2.5">TODAY'S PLAN — TAP TO LOG</div>
-              {todayPlan.map((row) => (
-                <button
-                  key={row.id}
-                  onClick={() => setPlannedLog({ label: row.label })}
-                  className="flex items-center gap-2.5 bg-panel-raised border border-hairline rounded-[10px] px-3 py-2.5 text-left"
-                >
-                  <div className="w-[26px] h-[26px] rounded-[7px] bg-signal-dim flex items-center justify-center flex-shrink-0">
-                    <Dumbbell size={13} className="text-signal" />
-                  </div>
-                  <span className="flex-1 text-[12.5px] text-fg">{row.label}</span>
-                  {!row.required && (
-                    <span className="font-mono text-[9px] text-fg-dim border border-hairline rounded-[4px] px-1.5 py-0.5">
-                      OPT
-                    </span>
-                  )}
-                </button>
-              ))}
+              {todayPlan.map((row, i) => {
+                const done = i < workouts.length
+                return (
+                  <button
+                    key={row.id}
+                    onClick={() => setPlannedLog({ label: row.label })}
+                    className={`flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left ${
+                      done ? 'bg-signal-dim/40 border-signal/35' : 'bg-panel-raised border-hairline'
+                    }`}
+                  >
+                    <div
+                      className={`w-[26px] h-[26px] rounded-[7px] flex items-center justify-center flex-shrink-0 ${
+                        done ? 'bg-signal' : 'bg-panel border border-hairline'
+                      }`}
+                    >
+                      {done ? (
+                        <Check size={14} className="text-[#06150F]" />
+                      ) : (
+                        <Dumbbell size={13} className="text-fg-muted" />
+                      )}
+                    </div>
+                    <span className="flex-1 text-[12.5px] text-fg">{row.label}</span>
+                    {done ? (
+                      <span className="font-mono text-[9px] text-signal border border-signal/35 rounded-[4px] px-1.5 py-0.5">
+                        DONE
+                      </span>
+                    ) : (
+                      !row.required && (
+                        <span className="font-mono text-[9px] text-fg-dim border border-hairline rounded-[4px] px-1.5 py-0.5">
+                          OPT
+                        </span>
+                      )
+                    )}
+                  </button>
+                )
+              })}
             </div>
           )}
         </Panel>
